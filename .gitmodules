@@ -1,0 +1,3 @@
+[submodule "LuxTTS"]
+	path = LuxTTS
+	url = https://github.com/ysharma3501/LuxTTS.git
