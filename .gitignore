@@ -173,6 +173,7 @@ poetry.lock  # Optional: some teams prefer to commit this
 *.mp4
 *.avi
 *.mov
+*.wav
 
 # Docker
 .dockerignore
