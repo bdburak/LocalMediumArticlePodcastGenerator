@@ -3,12 +3,12 @@ import os
 import re
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 from typing import Optional
 import json
 
 
 class TextUtils:
-
     @staticmethod
     def _ensure_log_dir(log_path: str):
         """Internal helper to make sure the log directory exists."""
@@ -41,6 +41,41 @@ class TextUtils:
             # Save log
             log_path = os.path.join(log_path, "LOG_page.html")
             with open(log_path, "w", encoding="UTF-8") as f:
+                f.write(html_content)
+
+            return html_content
+
+    @staticmethod
+    async def get_medium_article_html_async(url: str, log_path: str) -> str:
+        TextUtils._ensure_log_dir(log_path)
+
+        import sys as _sys
+        import types
+
+        if "__main__" not in _sys.modules:
+            _sys.modules["__main__"] = types.ModuleType("__main__")
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 800},
+            )
+            page = await context.new_page()
+            await page.goto(url, wait_until="domcontentloaded")
+
+            try:
+                await page.wait_for_selector("article section", timeout=15000)
+                await page.mouse.wheel(0, 2000)
+                await page.wait_for_timeout(2000)
+            except Exception as e:
+                print(f"Warning: {e}")
+
+            html_content = await page.content()
+            await browser.close()
+
+            log_file_path = os.path.join(log_path, "LOG_page.html")
+            with open(log_file_path, "w", encoding="UTF-8") as f:
                 f.write(html_content)
 
             return html_content
