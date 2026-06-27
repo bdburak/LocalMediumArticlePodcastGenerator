@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Podcast Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Podcast Generator</h1>
+            <p class="subtitle">Transform Medium articles into audio podcasts</p>
+        </header>
+
+        <div class="progress-bar">
+            <div class="step active" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-label">Article</div>
+            </div>
+            <div class="step" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-label">Voice Clones</div>
+            </div>
+            <div class="step" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-label">Generate</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <section id="stage-1" class="stage">
+                <h2>Enter Article URL</h2>
+                <div class="form-group">
+                    <input type="url" id="article-url" placeholder="https://medium.com/@user/article-title" required>
+                    <button id="fetch-btn" class="btn primary">Fetch & Generate Script</button>
+                </div>
+                <div id="stage-1-loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <span>Fetching article and generating script...</span>
+                </div>
+                <div id="script-preview" class="script-preview hidden">
+                    <h3>Generated Script</h3>
+                    <div id="script-content"></div>
+                    <div class="nav-buttons">
+                        <button id="back-to-url" class="btn secondary">Back</button>
+                        <button id="proceed-stage-2" class="btn primary">Next: Voice Clones</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="stage-2" class="stage hidden">
+                <h2>Voice Reference Files</h2>
+                <p class="description">Upload reference WAV files for each speaker to generate voice clones.</p>
+                
+                <div class="speakers-container">
+                    <div class="speaker-card">
+                        <h3>Speaker A</h3>
+                        <div class="drop-zone" id="drop-zone-a" data-speaker="A">
+                            <div class="drop-zone-content">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <span>Drag & drop WAV file here</span>
+                                <span class="or">or</span>
+                                <label class="btn secondary file-btn">
+                                    Browse Files
+                                    <input type="file" accept=".wav" hidden>
+                                </label>
+                            </div>
+                            <div class="file-info hidden">
+                                <span class="filename"></span>
+                                <button class="btn icon remove-btn" title="Remove">×</button>
+                            </div>
+                        </div>
+                        <div class="audio-preview hidden">
+                            <audio controls></audio>
+                        </div>
+                        <div class="transcript-group">
+                            <label for="transcript-a">Transcript (optional)</label>
+                            <textarea id="transcript-a" placeholder="Paste transcript for better voice cloning precision..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="speaker-card">
+                        <h3>Speaker B</h3>
+                        <div class="drop-zone" id="drop-zone-b" data-speaker="B">
+                            <div class="drop-zone-content">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <span>Drag & drop WAV file here</span>
+                                <span class="or">or</span>
+                                <label class="btn secondary file-btn">
+                                    Browse Files
+                                    <input type="file" accept=".wav" hidden>
+                                </label>
+                            </div>
+                            <div class="file-info hidden">
+                                <span class="filename"></span>
+                                <button class="btn icon remove-btn" title="Remove">×</button>
+                            </div>
+                        </div>
+                        <div class="audio-preview hidden">
+                            <audio controls></audio>
+                        </div>
+                        <div class="transcript-group">
+                            <label for="transcript-b">Transcript (optional)</label>
+                            <textarea id="transcript-b" placeholder="Paste transcript for better voice cloning precision..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="clone-upload-section">
+                    <button id="generate-clones-btn" class="btn primary" disabled>Generate Voice Clones</button>
+                </div>
+                
+                <div id="clone-status" class="status-panel hidden">
+                    <h3>Generating Voice Clones...</h3>
+                    <ul id="clone-steps"></ul>
+                </div>
+
+                <div id="clone-complete" class="complete-panel hidden">
+                    <span class="checkmark">✓</span>
+                    <span>Voice clones generated successfully!</span>
+                </div>
+
+                <div class="nav-buttons">
+                    <button id="back-to-stage-1" class="btn secondary">Back</button>
+                    <button id="proceed-stage-3" class="btn primary" disabled>Next: Generate Podcast</button>
+                </div>
+            </section>
+
+            <section id="stage-3" class="stage hidden">
+                <h2>Generate Podcast</h2>
+                <p class="description">Your podcast is ready to be generated from the script and voice clones.</p>
+                
+                <button id="generate-podcast-btn" class="btn primary">Generate Podcast</button>
+
+                <div id="podcast-status" class="status-panel hidden">
+                    <h3>Generating Podcast...</h3>
+                    <ul id="podcast-steps"></ul>
+                </div>
+
+                <div id="podcast-complete" class="audio-player-panel hidden">
+                    <h3>Podcast Ready!</h3>
+                    <audio id="final-audio" controls>
+                        <source src="/placaholders/full_episode_async.wav" type="audio/wav">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+
+                <div class="nav-buttons">
+                    <button id="back-to-stage-2" class="btn secondary">Back</button>
+                    <button id="restart-btn" class="btn secondary">Start Over</button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

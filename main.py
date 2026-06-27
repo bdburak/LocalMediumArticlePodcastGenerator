@@ -25,7 +25,7 @@ scriptMaker = ScriptMaker()
 async def main():
     print("Generating script")
     conversation = await scriptMaker.generateScript(
-        url="https://medium.com/@dogucuburak/file-transfer-using-runpodctl-to-and-from-runpod-instances-b0db35c5ffeb"
+        url="https://medium.com/@brettluelling/sdlc-for-agentic-ai-engineering-5813abfdbc12"
     )
 
     print("starting generating audio")
