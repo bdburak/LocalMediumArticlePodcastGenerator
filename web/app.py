@@ -1,79 +1,34 @@
-from flask import Flask, render_template, request, session, jsonify, send_from_directory
 import os
+import sys
 import json
+import io
+import base64
 import time
-from ttsClass import TTS
+import asyncio
+from uuid import uuid4
+
+import httpx
+import soundfile as sf
+import numpy as np
+from flask import Flask, render_template, request, session, jsonify, send_from_directory, Response
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.scriptMaker import ScriptMaker
+from utils.wavCombiner import combine_wavs_interleaved
+from job_queue import JobQueue
 
 app = Flask(__name__)
-app.secret_key = "podcast-generator-secret-key"
+app.secret_key = os.environ.get("SECRET_KEY", "podcast-generator-secret-key")
 app.config["UPLOAD_FOLDER"] = "uploads/ref_voices"
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
+TTS_API_URL = os.environ.get("TTS_API_URL", "http://127.0.0.1:8091")
+job_queue = JobQueue()
+
 PLACEHOLDER_DIALOG = "placaholders/LOG_dialog.json"
-PLACEHOLDER_AUDIO = "placaholders/full_episode_async.wav"
-
-tts = TTS()
-
-
-def placeholder_fetch_article(url):
-    time.sleep(1)
-    return {
-        "title": "The Future of AI in Software Development",
-        "content": "Article content would be fetched here using Playwright and BeautifulSoup...",
-        "url": url,
-    }
-
-
-def placeholder_generate_script(article_data):
-    time.sleep(2)
-    with open(PLACEHOLDER_DIALOG, "r", encoding="UTF-8") as f:
-        return json.load(f)
-
-
-def placeholder_upload_reference_audio(filename, transcript=None):
-    time.sleep(0.5)
-    return {"status": "uploaded", "filename": filename}
-
-
-def placeholder_generate_voice_clones():
-    steps = [
-        "Analyzing reference audio A...",
-        "Extracting voice features from Speaker A...",
-        "Training voice model for Speaker A...",
-        "Analyzing reference audio B...",
-        "Extracting voice features from Speaker B...",
-        "Training voice model for Speaker B...",
-        "Voice clones generated successfully!",
-    ]
-    for step in steps:
-        yield step
-        time.sleep(1)
-
-
-def placeholder_generate_podcast():
-    steps = [
-        "Initializing TTS engine...",
-        "Synthesizing segment 1/11...",
-        "Synthesizing segment 2/11...",
-        "Synthesizing segment 3/11...",
-        "Synthesizing segment 4/11...",
-        "Synthesizing segment 5/11...",
-        "Synthesizing segment 6/11...",
-        "Synthesizing segment 7/11...",
-        "Synthesizing segment 8/11...",
-        "Synthesizing segment 9/11...",
-        "Synthesizing segment 10/11...",
-        "Synthesizing segment 11/11...",
-        "Mixing audio tracks...",
-        "Adding transitions...",
-        "Finalizing podcast audio...",
-        "Podcast generated successfully!",
-    ]
-    for step in steps:
-        yield step
-        time.sleep(0.8)
 
 
 @app.route("/")
@@ -86,8 +41,6 @@ def index():
         session["voice_a"] = None
     if "voice_b" not in session:
         session["voice_b"] = None
-    if "podcast_ready" not in session:
-        session["podcast_ready"] = False
     return render_template("index.html", stage=session.get("stage", 1))
 
 
@@ -99,8 +52,18 @@ def api_fetch_article():
     if not url:
         return jsonify({"error": "URL is required"}), 400
 
-    article = placeholder_fetch_article(url)
-    dialog = placeholder_generate_script(article)
+    script_maker = ScriptMaker()
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        dialog = loop.run_until_complete(script_maker.generateScript(url=url, log_path="./logs"))
+        loop.close()
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate script: {str(e)}"}), 500
+
+    if not dialog or not dialog.get("script"):
+        return jsonify({"error": "Could not generate a script from this article"}), 500
 
     session["dialog"] = dialog
     session["stage"] = 2
@@ -117,25 +80,39 @@ def api_upload_reference():
     speaker = request.form.get("speaker", "A")
     transcript = request.form.get("transcript", "")
 
-    filename = file.filename
-    if not filename:
+    if not file.filename:
         return jsonify({"error": "No file selected"}), 400
 
-    if not filename.endswith(".wav"):
+    if not file.filename.endswith(".wav"):
         return jsonify({"error": "Only WAV files are supported"}), 400
 
-    filename = f"speaker_{speaker}_{int(time.time())}.wav"
-    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    file.save(filepath)
+    local_filename = f"speaker_{speaker}_{int(time.time())}.wav"
+    local_filepath = os.path.join(app.config["UPLOAD_FOLDER"], local_filename)
+    file.save(local_filepath)
 
-    placeholder_upload_reference_audio(filename, transcript)
+    voice_name = f"{app.secret_key}_{speaker}_{int(time.time())}"
+
+    try:
+        with open(local_filepath, "rb") as f:
+            resp = httpx.post(
+                f"{TTS_API_URL}/voices",
+                files={"audio_sample": (local_filename, f, "audio/wav")},
+                data={"name": voice_name, "ref_text": transcript},
+                timeout=120,
+            )
+        if resp.status_code != 200:
+            return jsonify({"error": f"TTS server error: {resp.text}"}), 500
+    except httpx.ConnectError:
+        return jsonify(
+            {"error": "TTS server is not running. Start it with: python local_tts_server.py"}
+        ), 503
 
     if speaker == "A":
-        session["voice_a"] = filename
+        session["voice_a"] = voice_name
     else:
-        session["voice_b"] = filename
+        session["voice_b"] = voice_name
 
-    return jsonify({"success": True, "filename": filename})
+    return jsonify({"success": True, "filename": local_filename, "voice_name": voice_name})
 
 
 @app.route("/uploads/ref_voices/<filename>")
@@ -148,13 +125,95 @@ def serve_placeholder_file(filename):
     return send_from_directory("placaholders", filename)
 
 
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "podcasts")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+def _generate_podcast_job(
+    dialog: dict,
+    voice_a_name: str,
+    voice_b_name: str,
+    _report=None,
+) -> str:
+    topic = dialog.get("topic", dialog.get("title", ""))
+    lines_a = [topic] + [entry["text"] for entry in dialog["script"] if entry["speaker"] == "Host_A"]
+    lines_b = [entry["text"] for entry in dialog["script"] if entry["speaker"] == "Host_B"]
+
+    if _report:
+        _report(10)
+
+    resp_a = httpx.post(
+        f"{TTS_API_URL}/speech/batch",
+        json={
+            "items": [{"input": t} for t in lines_a],
+            "voice": voice_a_name,
+        },
+        timeout=600,
+    )
+    if resp_a.status_code != 200:
+        raise RuntimeError(f"TTS batch failed for speaker A: {resp_a.text}")
+
+    if _report:
+        _report(40)
+
+    resp_b = httpx.post(
+        f"{TTS_API_URL}/speech/batch",
+        json={
+            "items": [{"input": t} for t in lines_b],
+            "voice": voice_b_name,
+        },
+        timeout=600,
+    )
+    if resp_b.status_code != 200:
+        raise RuntimeError(f"TTS batch failed for speaker B: {resp_b.text}")
+
+    if _report:
+        _report(70)
+
+    wavs_a = []
+    for r in resp_a.json()["results"]:
+        if r["status"] == "success":
+            buf = io.BytesIO(base64.b64decode(r["audio_data"]))
+            wav, _sr = sf.read(buf)
+            wavs_a.append(wav)
+
+    wavs_b = []
+    for r in resp_b.json()["results"]:
+        if r["status"] == "success":
+            buf = io.BytesIO(base64.b64decode(r["audio_data"]))
+            wav, _sr = sf.read(buf)
+            wavs_b.append(wav)
+
+    if _report:
+        _report(85)
+
+    combined = combine_wavs_interleaved(wavs_a[0], wavs_a[1:], wavs_b, _sr, 0.5)
+
+    output_filename = f"podcast_{uuid4().hex[:8]}.wav"
+    output_path = os.path.join(OUTPUT_DIR, output_filename)
+
+    sf.write(output_path, combined, _sr)
+
+    if _report:
+        _report(100)
+
+    return output_filename
+
+
 @app.route("/api/generate-clones", methods=["POST"])
 def api_generate_clones():
     if not session.get("voice_a") or not session.get("voice_b"):
         return jsonify({"error": "Both speakers must have reference audio"}), 400
 
     def generate():
-        for step in placeholder_generate_voice_clones():
+        steps = [
+            "Analyzing reference audio A...",
+            "Speaker A voice clone ready.",
+            "Analyzing reference audio B...",
+            "Speaker B voice clone ready.",
+            "Voice clones generated successfully!",
+        ]
+        for step in steps:
             yield f"data: {json.dumps({'step': step})}\n\n"
 
     return app.response_class(generate(), mimetype="text/event-stream")
@@ -162,14 +221,48 @@ def api_generate_clones():
 
 @app.route("/api/generate-podcast", methods=["POST"])
 def api_generate_podcast():
-    if not session.get("dialog"):
+    dialog = session.get("dialog")
+    if not dialog:
         return jsonify({"error": "No dialog script available"}), 400
 
-    session["podcast_ready"] = True
+    voice_a = session.get("voice_a")
+    voice_b = session.get("voice_b")
+    if not voice_a or not voice_b:
+        return jsonify({"error": "Both speakers must have reference audio"}), 400
+
+    jid = job_queue.submit(
+        _generate_podcast_job,
+        dialog=dialog,
+        voice_a_name=voice_a,
+        voice_b_name=voice_b,
+    )
 
     def generate():
-        for step in placeholder_generate_podcast():
-            yield f"data: {json.dumps({'step': step})}\n\n"
+        last_progress = -1
+        while True:
+            job = job_queue.get(jid)
+            if job is None:
+                yield f"data: {json.dumps({'step': 'Unknown job ID', 'status': 'error'})}\n\n"
+                return
+
+            if job["status"] == "failed":
+                yield f"data: {json.dumps({'step': job['error'], 'status': 'failed'})}\n\n"
+                return
+
+            pct = job.get("progress", 0)
+            if pct != last_progress:
+                last_progress = pct
+                if pct == 0 and job["status"] == "queued":
+                    yield f"data: {json.dumps({'step': 'Queued for generation...', 'progress': pct})}\n\n"
+                elif job["status"] == "processing":
+                    yield f"data: {json.dumps({'step': f'Generating podcast... {pct}%', 'progress': pct})}\n\n"
+
+            if job["status"] == "done":
+                podcast_file = job["result"]
+                yield f"data: {json.dumps({'step': 'Podcast generated successfully!', 'progress': 100, 'status': 'done', 'audio_url': f'/static/podcasts/{podcast_file}'})}\n\n"
+                return
+
+            time.sleep(0.5)
 
     return app.response_class(generate(), mimetype="text/event-stream")
 
@@ -182,6 +275,11 @@ def api_reset():
         if os.path.isfile(filepath):
             os.remove(filepath)
     return jsonify({"success": True})
+
+
+@app.route("/static/podcasts/<filename>")
+def serve_podcast(filename):
+    return send_from_directory(OUTPUT_DIR, filename)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ class ScriptMaker:
         self,
         log_path: str = "./logs",
         url: str = "",
-        model: str = "openrouter:nvidia/nemotron-3-nano-30b-a3b:free",
+        model: str = "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
     ) -> dict:
         print("getting raw html")
         rawHTML = await TextUtils.get_medium_article_html_async(url, log_path)

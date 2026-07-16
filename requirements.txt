@@ -19,3 +19,7 @@ html2text
 playwright
 beautifulsoup4
 qwen-tts
+fastapi
+uvicorn
+httpx
+python-multipart

@@ -286,27 +286,39 @@ document.addEventListener('DOMContentLoaded', () => {
                         const data = JSON.parse(line.slice(6));
                         const li = document.createElement('li');
                         li.textContent = data.step;
+
+                        if (data.status === 'done') {
+                            li.classList.add('done');
+                            stepsList.appendChild(li);
+
+                            if (data.audio_url) {
+                                const audio = document.getElementById('final-audio');
+                                audio.querySelector('source').src = data.audio_url;
+                                audio.load();
+                            }
+                            complete.classList.remove('hidden');
+                            podcastGenerated = true;
+                            return;
+                        }
+
+                        if (data.status === 'failed') {
+                            li.classList.add('done');
+                            li.style.color = 'var(--error)';
+                            stepsList.appendChild(li);
+                            btn.disabled = false;
+                            return;
+                        }
+
                         li.classList.add('current');
-                        
                         const prevCurrent = stepsList.querySelector('.current');
                         if (prevCurrent) {
                             prevCurrent.classList.remove('current');
                             prevCurrent.classList.add('done');
                         }
-                        
                         stepsList.appendChild(li);
                     }
                 }
             }
-
-            const lastLi = stepsList.querySelector('.current');
-            if (lastLi) {
-                lastLi.classList.remove('current');
-                lastLi.classList.add('done');
-            }
-
-            complete.classList.remove('hidden');
-            podcastGenerated = true;
         } catch (err) {
             alert('Error generating podcast: ' + err.message);
             btn.disabled = false;

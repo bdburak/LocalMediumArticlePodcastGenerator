@@ -192,3 +192,16 @@ LOG_*
 
 null
 nul
+
+# Generated podcast output
+web/static/podcasts/
+
+# TTS temp files
+LOG_temp_test/
+
+# Uploaded reference voices (user data)
+web/uploads/ref_voices/
+
+# Opencode / Superpowers
+.opencode/
+AGENTS.md
