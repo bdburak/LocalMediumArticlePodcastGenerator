@@ -532,6 +532,139 @@ input[type="url"]:focus {
     justify-content: center;
 }
 
+.history-section {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+}
+
+.history-section h2 {
+    margin-bottom: 16px;
+}
+
+.history-card {
+    background: var(--bg-tertiary);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: background 0.2s;
+}
+
+.history-card:hover {
+    background: var(--border);
+}
+
+.history-card .card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.history-card .card-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-card .card-meta {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.history-card .card-meta a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.history-card .card-meta a:hover {
+    text-decoration: underline;
+}
+
+.history-card .card-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.history-card .btn.small {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    border-radius: 6px;
+}
+
+.script-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.script-modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 700px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.script-modal h3 {
+    margin-bottom: 16px;
+}
+
+.script-modal .dialog-entry {
+    padding: 10px 14px;
+    margin: 6px 0;
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    border-left: 4px solid var(--accent);
+}
+
+.script-modal .dialog-entry.speaker-b {
+    border-left-color: #22c55e;
+}
+
+.script-modal .speaker-label {
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+
+.script-modal .speaker-b .speaker-label {
+    color: #22c55e;
+}
+
+.script-modal .modal-close {
+    float: right;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.script-modal .modal-close:hover {
+    color: var(--text-primary);
+}
+
 @media (max-width: 768px) {
     .speakers-container {
         grid-template-columns: 1fr;

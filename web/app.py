@@ -17,6 +17,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.scriptMaker import ScriptMaker
 from utils.wavCombiner import combine_wavs_interleaved
 from job_queue import JobQueue
+from project_store import (
+    load_projects,
+    save_project,
+    get_project,
+    delete_project,
+    load_voices,
+    save_voice,
+    delete_voice,
+)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "podcast-generator-secret-key")
@@ -67,6 +76,7 @@ def api_fetch_article():
 
     session["dialog"] = dialog
     session["stage"] = 2
+    session["article_url"] = url
 
     return jsonify({"success": True, "dialog": dialog})
 
@@ -237,7 +247,10 @@ def api_generate_podcast():
         voice_b_name=voice_b,
     )
 
+    _saved = False
+
     def generate():
+        nonlocal _saved
         last_progress = -1
         while True:
             job = job_queue.get(jid)
@@ -259,12 +272,95 @@ def api_generate_podcast():
 
             if job["status"] == "done":
                 podcast_file = job["result"]
+                if not _saved:
+                    _saved = True
+                    save_project({
+                        "id": jid,
+                        "article_url": session.get("article_url", ""),
+                        "article_title": dialog.get("title", ""),
+                        "podcast_file": podcast_file,
+                        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                        "dialog": dialog,
+                        "voice_a_name": voice_a,
+                        "voice_b_name": voice_b,
+                    })
                 yield f"data: {json.dumps({'step': 'Podcast generated successfully!', 'progress': 100, 'status': 'done', 'audio_url': f'/static/podcasts/{podcast_file}'})}\n\n"
                 return
 
             time.sleep(0.5)
 
     return app.response_class(generate(), mimetype="text/event-stream")
+
+
+@app.route("/api/projects", methods=["GET"])
+def api_projects():
+    projects = load_projects()
+    return jsonify([
+        {
+            "id": p["id"],
+            "article_url": p.get("article_url", ""),
+            "article_title": p.get("article_title", "Untitled"),
+            "created_at": p.get("created_at", ""),
+            "podcast_file": p.get("podcast_file", ""),
+        }
+        for p in projects
+    ])
+
+
+@app.route("/api/projects/<project_id>", methods=["GET"])
+def api_project(project_id):
+    project = get_project(project_id)
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    return jsonify(project)
+
+
+@app.route("/api/projects/<project_id>", methods=["DELETE"])
+def api_delete_project(project_id):
+    delete_project(project_id)
+    return jsonify({"success": True})
+
+
+@app.route("/api/voices/list", methods=["GET"])
+def api_voices_list():
+    return jsonify(load_voices())
+
+
+@app.route("/api/voices/save", methods=["POST"])
+def api_voices_save():
+    data = request.get_json()
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Voice name is required"}), 400
+
+    voice_a = session.get("voice_a")
+    voice_b = session.get("voice_b")
+
+    ref_voice = None
+    if data.get("speaker") == "A":
+        ref_voice = voice_a
+    elif data.get("speaker") == "B":
+        ref_voice = voice_b
+    else:
+        return jsonify({"error": "Invalid speaker"}), 400
+
+    if not ref_voice:
+        return jsonify({"error": "No voice cloned for this speaker yet"}), 400
+
+    save_voice({
+        "name": name,
+        "tts_name": ref_voice,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    })
+    return jsonify({"success": True, "name": name})
+
+
+@app.route("/api/voices/delete", methods=["POST"])
+def api_voices_delete():
+    data = request.get_json()
+    name = data.get("name", "")
+    delete_voice(name)
+    return jsonify({"success": True})
 
 
 @app.route("/api/reset", methods=["POST"])
