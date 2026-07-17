@@ -206,5 +206,8 @@ web/uploads/ref_voices/
 .opencode/
 AGENTS.md
 
+# Saved voice library (user data)
+voices/
+
 # Web app runtime data
 web/data/
