@@ -55,7 +55,14 @@
             </section>
 
             <section id="stage-2" class="stage hidden">
-                <h2>Voice Reference Files</h2>
+                <h2>Prepare Voices</h2>
+
+                <div class="voice-mode-tabs">
+                    <button class="voice-mode-tab active" data-mode="clone">Upload Audio</button>
+                    <button class="voice-mode-tab" data-mode="design">Describe Voice</button>
+                </div>
+
+                <div id="voice-mode-clone" class="voice-mode-panel">
                 <p class="description">Upload reference WAV files for each speaker to generate voice clones.</p>
                 
                 <div class="speakers-container">
@@ -77,7 +84,7 @@
                             </div>
                             <div class="file-info hidden">
                                 <span class="filename"></span>
-                                <button class="btn icon remove-btn" title="Remove">×</button>
+                                <button class="btn icon remove-btn" title="Remove">&times;</button>
                             </div>
                         </div>
                         <div class="audio-preview hidden">
@@ -107,7 +114,7 @@
                             </div>
                             <div class="file-info hidden">
                                 <span class="filename"></span>
-                                <button class="btn icon remove-btn" title="Remove">×</button>
+                                <button class="btn icon remove-btn" title="Remove">&times;</button>
                             </div>
                         </div>
                         <div class="audio-preview hidden">
@@ -123,15 +130,49 @@
                 <div id="clone-upload-section">
                     <button id="generate-clones-btn" class="btn primary" disabled>Generate Voice Clones</button>
                 </div>
-                
+                </div>
+
+                <div id="voice-mode-design" class="voice-mode-panel hidden">
+                <p class="description">Describe the voices you want. The AI will create them from scratch -- no audio needed.</p>
+                <div class="speakers-container">
+                    <div class="speaker-card">
+                        <h3>Speaker A</h3>
+                        <div class="preset-chips">
+                            <button class="preset-chip" data-speaker="A" data-desc="A warm, calm, middle-aged male podcast host with a deep, resonant voice">Warm host</button>
+                            <button class="preset-chip" data-speaker="A" data-desc="A bright, energetic young female narrator with a clear, engaging tone">Energetic narrator</button>
+                            <button class="preset-chip" data-speaker="A" data-desc="A professional, authoritative male voice with a British accent, news broadcast style">Authoritative British</button>
+                            <button class="preset-chip" data-speaker="A" data-desc="A soft, gentle female voice with a soothing, calming tone, perfect for storytelling">Gentle storyteller</button>
+                        </div>
+                        <textarea id="voice-design-a" class="voice-design-textarea" placeholder="Describe the voice you want for Speaker A...&#10;&#10;Include details like: gender, age, accent, tone, emotion, speaking style. Be as specific as you like.&#10;&#10;Example: A warm, calm, middle-aged male voice with a deep, resonant tone -- like a seasoned radio host."></textarea>
+                    </div>
+                    <div class="speaker-card">
+                        <h3>Speaker B</h3>
+                        <div class="preset-chips">
+                            <button class="preset-chip" data-speaker="B" data-desc="A bright, curious, energetic young woman with a slightly fast speaking pace">Curious co-host</button>
+                            <button class="preset-chip" data-speaker="B" data-desc="A thoughtful, analytical male voice with a measured pace, like an investigative journalist">Analytical journalist</button>
+                            <button class="preset-chip" data-speaker="B" data-desc="A witty, slightly sarcastic young male voice, casual and conversational">Witty casual</button>
+                            <button class="preset-chip" data-speaker="B" data-desc="A gentle, empathetic female voice with a warm, nurturing quality">Empathetic warm</button>
+                        </div>
+                        <textarea id="voice-design-b" class="voice-design-textarea" placeholder="Describe the voice you want for Speaker B...&#10;&#10;Include details like: gender, age, accent, tone, emotion, speaking style. Be as specific as you like.&#10;&#10;Example: A bright, curious, energetic young woman with a slight American accent -- like a tech podcast co-host."></textarea>
+                    </div>
+                </div>
+                <div id="voice-design-section">
+                    <button id="design-voices-btn" class="btn primary" disabled>Design Voices</button>
+                </div>
+                <div id="voice-design-status" class="status-panel hidden">
+                    <h3>Designing Voices...</h3>
+                    <ul id="voice-design-steps"></ul>
+                </div>
+                </div>
+
                 <div id="clone-status" class="status-panel hidden">
-                    <h3>Generating Voice Clones...</h3>
+                    <h3>Preparing Voices...</h3>
                     <ul id="clone-steps"></ul>
                 </div>
 
                 <div id="clone-complete" class="complete-panel hidden">
-                    <span class="checkmark">✓</span>
-                    <span>Voice clones generated successfully!</span>
+                    <span class="checkmark">&#10003;</span>
+                    <span>Voices ready!</span>
                 </div>
 
                 <div class="nav-buttons">

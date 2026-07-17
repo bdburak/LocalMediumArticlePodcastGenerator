@@ -13,6 +13,7 @@ import soundfile as sf
 import torch
 
 from ttsClass import TTS
+from qwen_tts import Qwen3TTSModel
 
 app = FastAPI(title="Qwen3-TTS Local Server")
 
@@ -20,6 +21,20 @@ print("Loading TTS model...")
 tts = TTS(temp_file_location=os.path.join(tempfile.gettempdir(), "qwen3_tts_server"))
 
 voice_cache: dict[str, List] = {}
+voice_design_model = None
+
+
+def get_voice_design_model():
+    global voice_design_model
+    if voice_design_model is None:
+        print("Loading VoiceDesign model...")
+        voice_design_model = Qwen3TTSModel.from_pretrained(
+            "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+            device_map="cuda:0",
+            dtype=torch.bfloat16,
+            attn_implementation="sdpa",
+        )
+    return voice_design_model
 
 
 class SpeechRequest(BaseModel):
@@ -35,6 +50,12 @@ class BatchItem(BaseModel):
 class BatchRequest(BaseModel):
     items: List[BatchItem]
     voice: str
+    language: str = "English"
+
+
+class VoiceDesignRequest(BaseModel):
+    name: str
+    description: str
     language: str = "English"
 
 
@@ -63,6 +84,26 @@ async def upload_voice(
 
     voice_cache[name] = clone_items
     return {"name": name, "success": True}
+
+
+@app.post("/voice-design")
+def create_voice_design(request: VoiceDesignRequest):
+    model = get_voice_design_model()
+
+    test_phrase = "Hello, this is a voice design test."
+    wavs, sr = model.generate_voice_design(
+        text=test_phrase,
+        instruct=request.description,
+        language=request.language,
+    )
+
+    clone_items = tts.model.create_voice_clone_prompt(
+        ref_audio=wavs[0],
+        ref_text=test_phrase,
+    )
+
+    voice_cache[request.name] = clone_items
+    return {"name": request.name, "success": True}
 
 
 @app.post("/speech")

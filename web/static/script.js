@@ -344,6 +344,10 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('podcast-complete').classList.add('hidden');
             document.getElementById('transcript-a').value = '';
             document.getElementById('transcript-b').value = '';
+            document.getElementById('voice-design-a').value = '';
+            document.getElementById('voice-design-b').value = '';
+            document.getElementById('voice-design-status').classList.add('hidden');
+            document.getElementById('voice-design-steps').innerHTML = '';
             uploadedFiles = { A: null, B: null };
             
             const dropZones = document.querySelectorAll('.drop-zone');
@@ -355,6 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             checkGenerateClonesButton();
             checkProceedToStage3Button();
+            checkDesignVoicesButton();
         } catch (err) {
             alert('Error: ' + err.message);
         }
@@ -371,4 +376,109 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('restart-btn').addEventListener('click', handleRestart);
 
     document.querySelectorAll('.drop-zone').forEach(setupDropZone);
+
+    const clonePanel = document.getElementById('voice-mode-clone');
+    const designPanel = document.getElementById('voice-mode-design');
+    const modeTabs = document.querySelectorAll('.voice-mode-tab');
+
+    modeTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            modeTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            const mode = tab.dataset.mode;
+            if (mode === 'clone') {
+                clonePanel.classList.remove('hidden');
+                designPanel.classList.add('hidden');
+            } else {
+                clonePanel.classList.add('hidden');
+                designPanel.classList.remove('hidden');
+            }
+        });
+    });
+
+    document.querySelectorAll('.preset-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const speaker = chip.dataset.speaker;
+            const desc = chip.dataset.desc;
+            const textarea = document.getElementById(`voice-design-${speaker.toLowerCase()}`);
+            textarea.value = desc;
+            checkDesignVoicesButton();
+        });
+    });
+
+    const designTextareas = document.querySelectorAll('.voice-design-textarea');
+    designTextareas.forEach(ta => {
+        ta.addEventListener('input', checkDesignVoicesButton);
+    });
+
+    function checkDesignVoicesButton() {
+        const btn = document.getElementById('design-voices-btn');
+        const descA = document.getElementById('voice-design-a').value.trim();
+        const descB = document.getElementById('voice-design-b').value.trim();
+        btn.disabled = !(descA && descB);
+    }
+
+    async function handleDesignVoices() {
+        const btn = document.getElementById('design-voices-btn');
+        const status = document.getElementById('voice-design-status');
+        const stepsList = document.getElementById('voice-design-steps');
+        const complete = document.getElementById('clone-complete');
+        const statusClone = document.getElementById('clone-status');
+
+        btn.disabled = true;
+        status.classList.remove('hidden');
+        stepsList.innerHTML = '';
+
+        const descriptions = [
+            { speaker: 'A', desc: document.getElementById('voice-design-a').value.trim(), language: 'English' },
+            { speaker: 'B', desc: document.getElementById('voice-design-b').value.trim(), language: 'English' },
+        ];
+
+        try {
+            for (const item of descriptions) {
+                const li = document.createElement('li');
+                li.textContent = `Designing voice for Speaker ${item.speaker}...`;
+                li.classList.add('current');
+                const prevCurrent = stepsList.querySelector('.current');
+                if (prevCurrent) {
+                    prevCurrent.classList.remove('current');
+                    prevCurrent.classList.add('done');
+                }
+                stepsList.appendChild(li);
+
+                const resp = await fetch('/api/voice-design', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item),
+                });
+
+                const data = await resp.json();
+                if (!data.success) {
+                    li.textContent = `Speaker ${item.speaker}: ${data.error || 'Failed'}`;
+                    li.classList.remove('current');
+                    li.style.color = 'var(--error)';
+                    btn.disabled = false;
+                    return;
+                }
+
+                li.textContent = `Speaker ${item.speaker} voice designed.`;
+                li.classList.remove('current');
+                li.classList.add('done');
+            }
+
+            statusClone.classList.add('hidden');
+            complete.classList.remove('hidden');
+            clonesGenerated = true;
+            checkProceedToStage3Button();
+        } catch (err) {
+            const li = document.createElement('li');
+            li.textContent = 'Error: ' + err.message;
+            li.style.color = 'var(--error)';
+            stepsList.appendChild(li);
+            btn.disabled = false;
+        }
+    }
+
+    document.getElementById('design-voices-btn').addEventListener('click', handleDesignVoices);
 });

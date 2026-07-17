@@ -150,6 +150,43 @@ def api_upload_reference():
     return jsonify({"success": True, "filename": local_filename, "voice_name": voice_name})
 
 
+@app.route("/api/voice-design", methods=["POST"])
+def api_voice_design():
+    data = request.get_json()
+    speaker = data.get("speaker", "A")
+    description = data.get("description", "").strip()
+    language = data.get("language", "English")
+
+    if not description:
+        return jsonify({"error": "Voice description is required"}), 400
+
+    voice_name = f"{app.secret_key}_{speaker}_vd_{int(time.time())}"
+
+    try:
+        resp = httpx.post(
+            f"{TTS_API_URL}/voice-design",
+            json={
+                "name": voice_name,
+                "description": description,
+                "language": language,
+            },
+            timeout=120,
+        )
+        if resp.status_code != 200:
+            return jsonify({"error": f"TTS server error: {resp.text}"}), 500
+    except httpx.ConnectError:
+        return jsonify(
+            {"error": "TTS server is not running. Start it with: python local_tts_server.py"}
+        ), 503
+
+    if speaker == "A":
+        session["voice_a"] = voice_name
+    else:
+        session["voice_b"] = voice_name
+
+    return jsonify({"success": True, "voice_name": voice_name})
+
+
 @app.route("/uploads/ref_voices/<filename>")
 def serve_uploaded_file(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
