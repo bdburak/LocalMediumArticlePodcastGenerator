@@ -431,8 +431,8 @@ document.addEventListener('DOMContentLoaded', () => {
         stepsList.innerHTML = '';
 
         const descriptions = [
-            { speaker: 'A', desc: document.getElementById('voice-design-a').value.trim(), language: 'English' },
-            { speaker: 'B', desc: document.getElementById('voice-design-b').value.trim(), language: 'English' },
+            { speaker: 'A', description: document.getElementById('voice-design-a').value.trim(), language: 'English' },
+            { speaker: 'B', description: document.getElementById('voice-design-b').value.trim(), language: 'English' },
         ];
 
         try {
