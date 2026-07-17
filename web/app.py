@@ -23,6 +23,7 @@ from project_store import (
     get_project,
     delete_project,
 )
+from scripts_store import load_scripts, save_script, get_script, delete_script
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "podcast-generator-secret-key")
@@ -39,15 +40,30 @@ PLACEHOLDER_DIALOG = "placaholders/LOG_dialog.json"
 
 @app.route("/")
 def index():
-    if "stage" not in session:
-        session["stage"] = 1
-    if "dialog" not in session:
-        session["dialog"] = None
-    if "voice_a" not in session:
-        session["voice_a"] = None
-    if "voice_b" not in session:
-        session["voice_b"] = None
-    return render_template("index.html", stage=session.get("stage", 1))
+    return render_template("dashboard.html")
+
+
+@app.route("/scripts")
+def scripts_page():
+    return render_template("scripts.html")
+
+
+@app.route("/scripts/<script_id>")
+def script_page(script_id):
+    script = get_script(script_id)
+    if not script:
+        return "Script not found", 404
+    return render_template("script.html", project=script)
+
+
+@app.route("/voices")
+def voices_page():
+    return render_template("voices.html")
+
+
+@app.route("/studio")
+def studio_page():
+    return render_template("studio.html")
 
 
 @app.route("/projects")
@@ -487,6 +503,221 @@ def api_voices_delete():
         return jsonify({"error": "TTS server is not running."}), 503
 
     return jsonify({"success": True})
+
+
+@app.route("/api/dashboard", methods=["GET"])
+def api_dashboard():
+    scripts = load_scripts()
+    try:
+        voices_resp = httpx.get(f"{TTS_API_URL}/voices/list", timeout=10)
+        voices = voices_resp.json() if voices_resp.status_code == 200 else []
+    except httpx.ConnectError:
+        voices = []
+    projects = load_projects()
+
+    return jsonify({
+        "scripts_count": len(scripts),
+        "voices_count": len(voices),
+        "projects_count": len(projects),
+        "recent_scripts": scripts[:5],
+        "recent_voices": voices[:5],
+        "recent_projects": projects[:5],
+    })
+
+
+@app.route("/api/scripts", methods=["GET"])
+def api_scripts_list():
+    return jsonify(load_scripts())
+
+
+@app.route("/api/scripts/<script_id>", methods=["GET"])
+def api_script_detail(script_id):
+    script = get_script(script_id)
+    if not script:
+        return jsonify({"error": "Script not found"}), 404
+    return jsonify(script)
+
+
+@app.route("/api/scripts/create", methods=["POST"])
+def api_script_create():
+    data = request.get_json()
+    url = data.get("url", "").strip()
+
+    if not url:
+        return jsonify({"error": "URL is required"}), 400
+
+    script_maker = ScriptMaker()
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        dialog = loop.run_until_complete(script_maker.generateScript(url=url, log_path="./logs"))
+        loop.close()
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate script: {str(e)}"}), 500
+
+    if not dialog or not dialog.get("script"):
+        return jsonify({"error": "Could not generate a script from this article"}), 500
+
+    script_id = save_script({
+        "article_url": url,
+        "article_title": dialog.get("title", ""),
+        "dialog": dialog,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    })
+
+    return jsonify({
+        "success": True,
+        "id": script_id,
+        "article_title": dialog.get("title", ""),
+        "article_url": url,
+    })
+
+
+@app.route("/api/scripts/<script_id>", methods=["DELETE"])
+def api_script_delete(script_id):
+    delete_script(script_id)
+    return jsonify({"success": True})
+
+
+@app.route("/api/voices/preview", methods=["POST"])
+def api_voices_preview():
+    data = request.get_json()
+    display_name = data.get("display_name", "").strip()
+    text = data.get("text", "Hello, this is a voice preview.")
+
+    if not display_name:
+        return jsonify({"error": "Voice name is required"}), 400
+
+    try:
+        load_resp = httpx.post(
+            f"{TTS_API_URL}/voices/load",
+            json={"display_name": display_name},
+            timeout=30,
+        )
+        if load_resp.status_code != 200:
+            return jsonify({"error": "Failed to load voice"}), 500
+        cache_name = load_resp.json()["name"]
+    except httpx.ConnectError:
+        return jsonify({"error": "TTS server is not running."}), 503
+
+    try:
+        resp = httpx.post(
+            f"{TTS_API_URL}/speech",
+            json={"input": text, "voice": cache_name},
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            return jsonify({"error": f"TTS error: {resp.text}"}), 500
+        return Response(resp.content, mimetype="audio/wav")
+    except httpx.ConnectError:
+        return jsonify({"error": "TTS server is not running."}), 503
+
+
+@app.route("/api/studio/generate", methods=["POST"])
+def api_studio_generate():
+    data = request.get_json()
+    script_id = data.get("script_id", "").strip()
+    voice_a_name = data.get("voice_a_name", "").strip()
+    voice_b_name = data.get("voice_b_name", "").strip()
+
+    if not script_id or not voice_a_name or not voice_b_name:
+        return jsonify({"error": "script_id, voice_a_name, and voice_b_name are required"}), 400
+
+    script = get_script(script_id)
+    if not script:
+        return jsonify({"error": "Script not found"}), 404
+
+    dialog = script["dialog"]
+
+    def gen():
+        try:
+            load_a = httpx.post(
+                f"{TTS_API_URL}/voices/load",
+                json={"display_name": voice_a_name},
+                timeout=30,
+            )
+            if load_a.status_code != 200:
+                yield f"data: {json.dumps({'step': 'Failed to load voice A', 'status': 'failed'})}\n\n"
+                return
+            cache_a = load_a.json()["name"]
+
+            load_b = httpx.post(
+                f"{TTS_API_URL}/voices/load",
+                json={"display_name": voice_b_name},
+                timeout=30,
+            )
+            if load_b.status_code != 200:
+                yield f"data: {json.dumps({'step': 'Failed to load voice B', 'status': 'failed'})}\n\n"
+                return
+            cache_b = load_b.json()["name"]
+
+            yield f"data: {json.dumps({'step': 'Voices loaded. Generating podcast...', 'progress': 5})}\n\n"
+
+            topic = dialog.get("topic", dialog.get("title", ""))
+            lines_a = [topic] + [entry["text"] for entry in dialog["script"] if entry["speaker"] == "Host_A"]
+            lines_b = [entry["text"] for entry in dialog["script"] if entry["speaker"] == "Host_B"]
+
+            resp_a = httpx.post(
+                f"{TTS_API_URL}/speech/batch",
+                json={"items": [{"input": t} for t in lines_a], "voice": cache_a},
+                timeout=600,
+            )
+            if resp_a.status_code != 200:
+                yield f"data: {json.dumps({'step': 'TTS failed for speaker A', 'status': 'failed'})}\n\n"
+                return
+            yield f"data: {json.dumps({'step': 'Speaker A lines generated...', 'progress': 40})}\n\n"
+
+            resp_b = httpx.post(
+                f"{TTS_API_URL}/speech/batch",
+                json={"items": [{"input": t} for t in lines_b], "voice": cache_b},
+                timeout=600,
+            )
+            if resp_b.status_code != 200:
+                yield f"data: {json.dumps({'step': 'TTS failed for speaker B', 'status': 'failed'})}\n\n"
+                return
+            yield f"data: {json.dumps({'step': 'Speaker B lines generated...', 'progress': 70})}\n\n"
+
+            wavs_a = []
+            for r in resp_a.json()["results"]:
+                if r["status"] == "success":
+                    buf = io.BytesIO(base64.b64decode(r["audio_data"]))
+                    wav, sr = sf.read(buf)
+                    wavs_a.append(wav)
+
+            wavs_b = []
+            for r in resp_b.json()["results"]:
+                if r["status"] == "success":
+                    buf = io.BytesIO(base64.b64decode(r["audio_data"]))
+                    wav, sr = sf.read(buf)
+                    wavs_b.append(wav)
+
+            combined = combine_wavs_interleaved(wavs_a[0], wavs_a[1:], wavs_b, sr, 0.5)
+
+            jid = uuid4().hex[:8]
+            output_filename = f"podcast_{jid}.wav"
+            output_path = os.path.join(OUTPUT_DIR, output_filename)
+            sf.write(output_path, combined, sr)
+
+            save_project({
+                "id": jid,
+                "article_url": script.get("article_url", ""),
+                "article_title": script.get("article_title", ""),
+                "podcast_file": output_filename,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "dialog": dialog,
+                "voice_a_name": voice_a_name,
+                "voice_b_name": voice_b_name,
+            })
+
+            yield f"data: {json.dumps({'step': 'Podcast generated!', 'progress': 100, 'status': 'done', 'project_id': jid, 'audio_url': f'/static/podcasts/{output_filename}'})}\n\n"
+
+        except httpx.ConnectError:
+            yield f"data: {json.dumps({'step': 'TTS server connection failed', 'status': 'failed'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'step': str(e), 'status': 'failed'})}\n\n"
+
+    return app.response_class(gen(), mimetype="text/event-stream")
 
 
 @app.route("/api/reset", methods=["POST"])

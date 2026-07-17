@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project.article_title or 'Script' }} — Script</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/" class="nav-link">Dashboard</a>
+            <a href="/scripts" class="nav-link active">Scripts</a>
+            <a href="/voices" class="nav-link">Voices</a>
+            <a href="/studio" class="nav-link">Studio</a>
+            <a href="/projects" class="nav-link">History</a>
+        </nav>
+
+        <a href="/scripts" class="back-link">&larr; Back to Scripts</a>
+
+        <div class="project-detail">
+            <h1 class="project-title">{{ project.article_title or 'Untitled Script' }}</h1>
+            <div class="project-meta">
+                {% if project.article_url %}
+                <a href="{{ project.article_url }}" target="_blank" rel="noopener" class="article-link">View Article &nearr;</a>
+                {% endif %}
+                <span>{{ project.created_at }}</span>
+            </div>
+
+            <div class="script-section">
+                <h3>Dialog Script</h3>
+                <div class="script-body">
+                    {% for entry in project.dialog.script %}
+                    <div class="dialog-entry {{ 'speaker-b' if entry.speaker == 'Host_B' else 'speaker-a' }}">
+                        <div class="speaker-label">{{ 'Speaker B' if entry.speaker == 'Host_B' else 'Speaker A' }}</div>
+                        <div class="dialog-text">{{ entry.text }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="project-actions">
+                <a href="/studio?script={{ project.id }}" class="btn primary">Use in Studio</a>
+                <button class="btn secondary" onclick="deleteScript()">Delete Script</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function deleteScript() {
+            if (!confirm('Delete this script?')) return;
+            await fetch('/api/scripts/{{ project.id }}', { method: 'DELETE' });
+            window.location.href = '/scripts';
+        }
+    </script>
+</body>
+</html>

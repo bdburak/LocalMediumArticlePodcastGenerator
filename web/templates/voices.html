@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voices — AI Podcast Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/" class="nav-link">Dashboard</a>
+            <a href="/scripts" class="nav-link">Scripts</a>
+            <a href="/voices" class="nav-link active">Voices</a>
+            <a href="/studio" class="nav-link">Studio</a>
+            <a href="/projects" class="nav-link">History</a>
+        </nav>
+
+        <header>
+            <h1>Voices</h1>
+        </header>
+
+        <div id="voice-list" class="voice-library-page"></div>
+
+        <button id="create-voice-btn" class="btn primary" style="width:100%">+ Create New Voice</button>
+
+        <div id="create-voice-panel" class="create-voice-panel hidden">
+            <h3>Create New Voice</h3>
+            <input type="text" id="create-voice-name" class="create-voice-name-input" placeholder="Name this voice (e.g. Warm Host)">
+
+            <div class="voice-mode-tabs">
+                <button class="voice-mode-tab active" data-mode="clone">Upload Audio</button>
+                <button class="voice-mode-tab" data-mode="design">Describe Voice</button>
+            </div>
+
+            <div id="vm-clone" class="voice-mode-panel">
+                <div class="drop-zone" id="create-drop-zone">
+                    <div class="drop-zone-content">
+                        <span>Drop WAV file here or</span>
+                        <label class="btn secondary file-btn">Browse<input type="file" accept=".wav" hidden></label>
+                    </div>
+                    <div class="file-info hidden"><span class="filename"></span><button class="btn icon remove-btn">&times;</button></div>
+                </div>
+                <div class="audio-preview hidden"><audio controls></audio></div>
+                <textarea id="create-transcript" class="transcript-textarea" placeholder="Transcript (optional, improves clone quality)"></textarea>
+            </div>
+
+            <div id="vm-design" class="voice-mode-panel hidden">
+                <div class="preset-chips">
+                    <button class="preset-chip" data-desc="A warm, calm, middle-aged male podcast host with a deep, resonant voice">Warm host</button>
+                    <button class="preset-chip" data-desc="A bright, energetic young female narrator with a clear, engaging tone">Energetic</button>
+                    <button class="preset-chip" data-desc="A professional, authoritative male voice with a British accent">British</button>
+                    <button class="preset-chip" data-desc="A soft, gentle female voice with a soothing tone">Gentle</button>
+                    <button class="preset-chip" data-desc="A bright, curious, energetic young woman, fast pace">Curious</button>
+                    <button class="preset-chip" data-desc="A thoughtful, analytical male voice with a measured pace">Analyst</button>
+                </div>
+                <textarea id="create-voice-description" class="voice-design-textarea" placeholder="Describe the voice: gender, age, accent, tone...&#10;Example: A warm, calm male voice with a deep, resonant tone."></textarea>
+            </div>
+
+            <div class="create-voice-actions">
+                <button id="gen-create-btn" class="btn primary" disabled>Generate & Save</button>
+                <button id="cancel-create-btn" class="btn secondary">Cancel</button>
+            </div>
+
+            <div id="create-status" class="status-panel hidden"><ul id="create-steps"></ul></div>
+        </div>
+
+        <div id="test-audio-section" class="test-audio hidden">
+            <h3>Voice Preview</h3>
+            <audio id="test-audio" controls></audio>
+            <button id="close-test-btn" class="btn secondary">Close</button>
+        </div>
+    </div>
+
+    <script>
+        let allVoices = [];
+        let createMode = 'clone';
+        let createFile = null;
+
+        async function loadVoices() {
+            try {
+                const resp = await fetch('/api/voices/library');
+                allVoices = await resp.json();
+                const list = document.getElementById('voice-list');
+                if (!allVoices.length) { list.innerHTML = '<div class="empty-hint">No saved voices yet. Create one below.</div>'; return; }
+                list.innerHTML = allVoices.map(v => `
+                    <div class="voice-row" data-name="${esc(v.name)}">
+                        <div class="voice-row-info">
+                            <span class="voice-type-badge ${v.type}">${v.type === 'design' ? 'designed' : 'clone'}</span>
+                            <span class="voice-row-name">${esc(v.name)}</span>
+                            ${v.description ? `<span class="voice-row-desc">${esc(v.description)}</span>` : ''}
+                            <span class="voice-row-date">${formatDate(v.created_at)}</span>
+                        </div>
+                        <div class="voice-row-actions">
+                            <button class="btn small secondary test-voice-btn" data-name="${esc(v.name)}">Test</button>
+                            <button class="btn small icon delete-voice-btn" data-name="${esc(v.name)}">&times;</button>
+                        </div>
+                    </div>
+                `).join('');
+
+                document.querySelectorAll('.test-voice-btn').forEach(b => b.addEventListener('click', () => testVoice(b.dataset.name)));
+                document.querySelectorAll('.delete-voice-btn').forEach(b => b.addEventListener('click', () => deleteVoice(b.dataset.name)));
+            } catch (err) { console.error(err); }
+        }
+
+        async function testVoice(name) {
+            const section = document.getElementById('test-audio-section');
+            const audio = document.getElementById('test-audio');
+            section.classList.remove('hidden');
+            audio.src = '#';
+            try {
+                const resp = await fetch('/api/voices/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ display_name: name }),
+                });
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    audio.src = URL.createObjectURL(blob);
+                    audio.play();
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function deleteVoice(name) {
+            if (!confirm(`Delete voice "${name}"?`)) return;
+            await fetch('/api/voices/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ display_name: name }),
+            });
+            loadVoices();
+        }
+
+        function setCreateMode(mode) {
+            createMode = mode;
+            document.querySelectorAll('#create-voice-panel .voice-mode-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+            document.getElementById('vm-clone').classList.toggle('hidden', mode !== 'clone');
+            document.getElementById('vm-design').classList.toggle('hidden', mode !== 'design');
+            checkGenBtn();
+        }
+
+        function checkGenBtn() {
+            const btn = document.getElementById('gen-create-btn');
+            const name = document.getElementById('create-voice-name').value.trim();
+            let ok = !!name;
+            if (createMode === 'clone') ok = ok && !!createFile;
+            else ok = ok && !!document.getElementById('create-voice-description').value.trim();
+            btn.disabled = !ok;
+        }
+
+        function resetCreateForm() {
+            createFile = null;
+            const dz = document.getElementById('create-drop-zone');
+            dz.querySelector('.drop-zone-content').classList.remove('hidden');
+            dz.querySelector('.file-info').classList.add('hidden');
+            dz.querySelector('input[type="file"]').value = '';
+            dz.closest('.voice-mode-panel').querySelector('.audio-preview').classList.add('hidden');
+            document.getElementById('create-voice-name').value = '';
+            document.getElementById('create-voice-description').value = '';
+            document.getElementById('create-transcript').value = '';
+            document.getElementById('create-status').classList.add('hidden');
+        }
+
+        function setupDropZone() {
+            const dz = document.getElementById('create-drop-zone');
+            const fi = dz.querySelector('input[type="file"]');
+            const content = dz.querySelector('.drop-zone-content');
+            const fileInfo = dz.querySelector('.file-info');
+            const fn = dz.querySelector('.filename');
+            const ap = dz.closest('.voice-mode-panel').querySelector('.audio-preview');
+            const audio = ap.querySelector('audio');
+            const rm = dz.querySelector('.remove-btn');
+
+            dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+            dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+            dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); if (e.dataTransfer.files[0]) hf(e.dataTransfer.files[0]); });
+            fi.addEventListener('change', () => { if (fi.files[0]) hf(fi.files[0]); });
+            rm.addEventListener('click', e => { e.stopPropagation(); resetCreateForm(); checkGenBtn(); });
+
+            function hf(file) {
+                if (!file.name.endsWith('.wav')) { alert('Only WAV files'); return; }
+                createFile = file; fn.textContent = file.name;
+                content.classList.add('hidden'); fileInfo.classList.remove('hidden');
+                ap.classList.remove('hidden'); audio.src = URL.createObjectURL(file);
+                checkGenBtn();
+            }
+        }
+
+        async function handleGenerateCreate() {
+            const name = document.getElementById('create-voice-name').value.trim();
+            const btn = document.getElementById('gen-create-btn');
+            const status = document.getElementById('create-status');
+            const steps = document.getElementById('create-steps');
+            btn.disabled = true; status.classList.remove('hidden'); steps.innerHTML = '';
+
+            function add(t, cls) {
+                const li = document.createElement('li'); li.textContent = t; if (cls) li.classList.add(cls);
+                const p = steps.querySelector('.current'); if (p) { p.classList.remove('current'); p.classList.add('done'); }
+                steps.appendChild(li);
+            }
+
+            try {
+                let vtype = 'clone';
+                if (createMode === 'clone') {
+                    add('Uploading and cloning...', 'current');
+                    const fd = new FormData();
+                    fd.append('file', createFile); fd.append('speaker', 'A');
+                    fd.append('transcript', document.getElementById('create-transcript').value);
+                    const r = await fetch('/api/upload-reference', { method: 'POST', body: fd });
+                    const d = await r.json(); if (!d.success) throw new Error(d.error);
+                } else {
+                    vtype = 'design';
+                    add('Designing voice...', 'current');
+                    const d = document.getElementById('create-voice-description').value.trim();
+                    const r = await fetch('/api/voice-design', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ speaker: 'A', description: d }),
+                    });
+                    const data = await r.json(); if (!data.success) throw new Error(data.error);
+                }
+
+                add('Saving...', 'current');
+                const sr = await fetch('/api/voices/save', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        speaker: 'A', display_name: name, voice_type: vtype,
+                        description: createMode === 'design' ? document.getElementById('create-voice-description').value.trim() : '',
+                    }),
+                });
+                const sd = await sr.json(); if (!sd.success) throw new Error(sd.error);
+
+                add('Done!', 'done');
+                document.getElementById('create-voice-panel').classList.add('hidden');
+                resetCreateForm();
+                loadVoices();
+            } catch (err) {
+                add('Error: ' + err.message, '');
+                steps.lastChild.style.color = 'var(--error)';
+                btn.disabled = false;
+            }
+        }
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+        function formatDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString(); }
+
+        document.getElementById('create-voice-btn').addEventListener('click', () => document.getElementById('create-voice-panel').classList.remove('hidden'));
+        document.getElementById('cancel-create-btn').addEventListener('click', () => {
+            document.getElementById('create-voice-panel').classList.add('hidden');
+            resetCreateForm();
+        });
+        document.getElementById('close-test-btn').addEventListener('click', () => {
+            document.getElementById('test-audio-section').classList.add('hidden');
+            document.getElementById('test-audio').pause();
+        });
+        document.getElementById('gen-create-btn').addEventListener('click', handleGenerateCreate);
+        document.querySelectorAll('#create-voice-panel .voice-mode-tab').forEach(t => t.addEventListener('click', () => setCreateMode(t.dataset.mode)));
+        document.querySelectorAll('#create-voice-panel .preset-chip').forEach(c => c.addEventListener('click', () => {
+            document.getElementById('create-voice-description').value = c.dataset.desc; checkGenBtn();
+        }));
+        document.getElementById('create-voice-name').addEventListener('input', checkGenBtn);
+        document.getElementById('create-voice-description').addEventListener('input', checkGenBtn);
+        setupDropZone();
+        loadVoices();
+    </script>
+</body>
+</html>

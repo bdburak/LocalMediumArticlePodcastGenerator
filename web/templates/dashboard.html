@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — AI Podcast Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/" class="nav-link active">Dashboard</a>
+            <a href="/scripts" class="nav-link">Scripts</a>
+            <a href="/voices" class="nav-link">Voices</a>
+            <a href="/studio" class="nav-link">Studio</a>
+            <a href="/projects" class="nav-link">History</a>
+        </nav>
+
+        <header>
+            <h1>Dashboard</h1>
+        </header>
+
+        <div class="stats-row" id="stats-row">
+            <div class="stat-card"><div class="stat-number" id="stat-scripts">-</div><div class="stat-label">Scripts</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-voices">-</div><div class="stat-label">Voices</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-projects">-</div><div class="stat-label">Podcasts</div></div>
+        </div>
+
+        <div class="quick-actions">
+            <a href="/scripts" class="btn primary">+ New Script</a>
+            <a href="/voices" class="btn secondary">+ Create Voice</a>
+            <a href="/studio" class="btn secondary">Generate Podcast</a>
+        </div>
+
+        <div class="dashboard-sections">
+            <div class="dash-section">
+                <h2>Recent Scripts</h2>
+                <div id="recent-scripts" class="recent-list"></div>
+            </div>
+            <div class="dash-section">
+                <h2>Recent Voices</h2>
+                <div id="recent-voices" class="recent-list"></div>
+            </div>
+            <div class="dash-section">
+                <h2>Recent Podcasts</h2>
+                <div id="recent-projects" class="recent-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadDashboard() {
+            try {
+                const resp = await fetch('/api/dashboard');
+                const d = await resp.json();
+                document.getElementById('stat-scripts').textContent = d.scripts_count;
+                document.getElementById('stat-voices').textContent = d.voices_count;
+                document.getElementById('stat-projects').textContent = d.projects_count;
+
+                function renderList(elId, items, type) {
+                    const el = document.getElementById(elId);
+                    if (!items.length) { el.innerHTML = '<div class="empty-hint">None yet</div>'; return; }
+                    el.innerHTML = items.map(i => {
+                        if (type === 'scripts') return `<a href="/scripts/${i.id}" class="recent-item"><span class="ri-title">${esc(i.article_title)}</span><span class="ri-date">${formatDate(i.created_at)}</span></a>`;
+                        if (type === 'voices') return `<div class="recent-item"><span class="ri-type ${i.type}">${i.type}</span><span class="ri-title">${esc(i.name)}</span><span class="ri-date">${formatDate(i.created_at)}</span></div>`;
+                        if (type === 'projects') return `<a href="/project/${i.id}" class="recent-item"><span class="ri-title">${esc(i.article_title)}</span><span class="ri-date">${formatDate(i.created_at)}</span></a>`;
+                    }).join('');
+                }
+
+                renderList('recent-scripts', d.recent_scripts, 'scripts');
+                renderList('recent-voices', d.recent_voices, 'voices');
+                renderList('recent-projects', d.recent_projects, 'projects');
+            } catch (err) { console.error(err); }
+        }
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+        function formatDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString(); }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

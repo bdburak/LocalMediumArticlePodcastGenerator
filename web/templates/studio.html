@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio — AI Podcast Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/" class="nav-link">Dashboard</a>
+            <a href="/scripts" class="nav-link">Scripts</a>
+            <a href="/voices" class="nav-link">Voices</a>
+            <a href="/studio" class="nav-link active">Studio</a>
+            <a href="/projects" class="nav-link">History</a>
+        </nav>
+
+        <header>
+            <h1>Podcast Studio</h1>
+            <p class="subtitle">Combine a script with two voices to generate a podcast.</p>
+        </header>
+
+        <div class="studio-form">
+            <div class="studio-field">
+                <label>Script</label>
+                <select id="script-select" class="studio-select">
+                    <option value="">-- Select a script --</option>
+                </select>
+            </div>
+            <div class="studio-row">
+                <div class="studio-field">
+                    <label>Speaker A Voice</label>
+                    <select id="voice-a-select" class="studio-select">
+                        <option value="">-- Select voice --</option>
+                    </select>
+                </div>
+                <div class="studio-field">
+                    <label>Speaker B Voice</label>
+                    <select id="voice-b-select" class="studio-select">
+                        <option value="">-- Select voice --</option>
+                    </select>
+                </div>
+            </div>
+            <button id="generate-btn" class="btn primary" disabled style="width:100%">Generate Podcast</button>
+        </div>
+
+        <div id="gen-status" class="status-panel hidden">
+            <h3>Generating...</h3>
+            <ul id="gen-steps"></ul>
+        </div>
+
+        <div id="gen-complete" class="complete-panel hidden">
+            <span class="checkmark">&#10003;</span>
+            <span>Podcast generated!</span>
+        </div>
+
+        <div id="audio-player" class="audio-player-full hidden">
+            <audio id="final-audio" controls></audio>
+        </div>
+    </div>
+
+    <script>
+        async function loadSelects() {
+            try {
+                const [scriptsResp, voicesResp] = await Promise.all([
+                    fetch('/api/scripts'),
+                    fetch('/api/voices/library'),
+                ]);
+                const scripts = await scriptsResp.json();
+                const voices = await voicesResp.json();
+
+                const ss = document.getElementById('script-select');
+                ss.innerHTML = '<option value="">-- Select a script --</option>' +
+                    scripts.map(s => `<option value="${s.id}">${esc(s.article_title)}</option>`).join('');
+
+                const voiceOpts = '<option value="">-- Select voice --</option>' +
+                    voices.map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${v.type})</option>`).join('');
+                document.getElementById('voice-a-select').innerHTML = voiceOpts;
+                document.getElementById('voice-b-select').innerHTML = voiceOpts;
+
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('script')) {
+                    document.getElementById('script-select').value = params.get('script');
+                }
+
+                checkGenerate();
+            } catch (err) { console.error(err); }
+        }
+
+        function checkGenerate() {
+            const s = document.getElementById('script-select').value;
+            const a = document.getElementById('voice-a-select').value;
+            const b = document.getElementById('voice-b-select').value;
+            document.getElementById('generate-btn').disabled = !(s && a && b);
+        }
+
+        async function handleGenerate() {
+            const btn = document.getElementById('generate-btn');
+            const status = document.getElementById('gen-status');
+            const steps = document.getElementById('gen-steps');
+            const complete = document.getElementById('gen-complete');
+            const player = document.getElementById('audio-player');
+
+            btn.disabled = true;
+            status.classList.remove('hidden');
+            complete.classList.add('hidden');
+            player.classList.add('hidden');
+            steps.innerHTML = '';
+
+            const scriptId = document.getElementById('script-select').value;
+            const voiceA = document.getElementById('voice-a-select').value;
+            const voiceB = document.getElementById('voice-b-select').value;
+
+            try {
+                const resp = await fetch('/api/studio/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script_id: scriptId, voice_a_name: voiceA, voice_b_name: voiceB }),
+                });
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    for (const line of decoder.decode(value).split('\n')) {
+                        if (!line.startsWith('data: ')) continue;
+                        const d = JSON.parse(line.slice(6));
+                        const li = document.createElement('li');
+                        li.textContent = d.step;
+                        if (d.status === 'done') {
+                            li.classList.add('done'); steps.appendChild(li);
+                            document.getElementById('final-audio').src = d.audio_url;
+                            document.getElementById('final-audio').load();
+                            player.classList.remove('hidden');
+                            complete.classList.remove('hidden');
+                            btn.disabled = false;
+                            return;
+                        }
+                        if (d.status === 'failed') { li.classList.add('done'); li.style.color = 'var(--error)'; steps.appendChild(li); btn.disabled = false; return; }
+                        li.classList.add('current');
+                        const prev = steps.querySelector('.current');
+                        if (prev) { prev.classList.remove('current'); prev.classList.add('done'); }
+                        steps.appendChild(li);
+                    }
+                }
+            } catch (err) {
+                const li = document.createElement('li');
+                li.textContent = 'Error: ' + err.message;
+                li.style.color = 'var(--error)';
+                steps.appendChild(li);
+                btn.disabled = false;
+            }
+        }
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+        document.getElementById('generate-btn').addEventListener('click', handleGenerate);
+        document.getElementById('script-select').addEventListener('change', checkGenerate);
+        document.getElementById('voice-a-select').addEventListener('change', checkGenerate);
+        document.getElementById('voice-b-select').addEventListener('change', checkGenerate);
+
+        loadSelects();
+    </script>
+</body>
+</html>

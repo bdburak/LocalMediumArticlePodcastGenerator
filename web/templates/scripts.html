@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scripts — AI Podcast Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/" class="nav-link">Dashboard</a>
+            <a href="/scripts" class="nav-link active">Scripts</a>
+            <a href="/voices" class="nav-link">Voices</a>
+            <a href="/studio" class="nav-link">Studio</a>
+            <a href="/projects" class="nav-link">History</a>
+        </nav>
+
+        <header>
+            <h1>Scripts</h1>
+        </header>
+
+        <div id="create-form" class="create-form">
+            <div class="form-group-inline">
+                <input type="url" id="article-url" placeholder="https://medium.com/@user/article-title" class="search-bar" style="flex:1">
+                <button id="generate-btn" class="btn primary">Generate Script</button>
+            </div>
+            <div id="gen-status" class="status-text hidden"></div>
+        </div>
+
+        <div class="section-list" id="scripts-list"></div>
+    </div>
+
+    <script>
+        async function loadScripts() {
+            const resp = await fetch('/api/scripts');
+            const scripts = await resp.json();
+            const list = document.getElementById('scripts-list');
+            if (!scripts.length) { list.innerHTML = '<div class="empty-hint">No scripts yet. Generate one from a Medium article URL above.</div>'; return; }
+            list.innerHTML = scripts.map(s => `
+                <div class="script-row" data-id="${s.id}">
+                    <a href="/scripts/${s.id}" class="script-link">
+                        <span class="script-title">${esc(s.article_title)}</span>
+                        <span class="script-url">${esc(s.article_url)}</span>
+                        <span class="script-date">${formatDate(s.created_at)}</span>
+                    </a>
+                    <div class="script-actions">
+                        <a href="/studio?script=${s.id}" class="btn small secondary">Use in Studio</a>
+                        <button class="btn small icon delete-script-btn" data-id="${s.id}">&times;</button>
+                    </div>
+                </div>
+            `).join('');
+            document.querySelectorAll('.delete-script-btn').forEach(b => b.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('Delete this script?')) return;
+                await fetch(`/api/scripts/${b.dataset.id}`, { method: 'DELETE' });
+                loadScripts();
+            }));
+        }
+
+        document.getElementById('generate-btn').addEventListener('click', async () => {
+            const url = document.getElementById('article-url').value.trim();
+            if (!url) return;
+            const btn = document.getElementById('generate-btn');
+            const status = document.getElementById('gen-status');
+            btn.disabled = true;
+            status.classList.remove('hidden');
+            status.textContent = 'Generating script...';
+
+            try {
+                const resp = await fetch('/api/scripts/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    status.textContent = 'Script generated!';
+                    document.getElementById('article-url').value = '';
+                    loadScripts();
+                } else {
+                    status.textContent = 'Error: ' + (data.error || 'Unknown');
+                }
+            } catch (err) {
+                status.textContent = 'Error: ' + err.message;
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => status.classList.add('hidden'), 3000);
+            }
+        });
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+        function formatDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString(); }
+
+        loadScripts();
+    </script>
+</body>
+</html>
