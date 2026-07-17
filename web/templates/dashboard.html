@@ -17,46 +17,68 @@
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀</button>
         </nav>
 
-        <div class="bento-grid">
-            <div class="bento-card hero">
-                <h2>Create a New Script</h2>
-                <p class="subtitle">Transform any Medium article into a podcast conversation.</p>
-                <input type="url" id="hero-url" class="hero-input" placeholder="Paste a Medium article URL...">
-                <div class="hero-actions">
-                    <button id="hero-generate-btn" class="btn primary">Generate Script</button>
-                    <a href="/scripts" class="btn secondary">Browse Scripts</a>
+        <header>
+            <h1>Dashboard</h1>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-number" id="stat-scripts">-</div>
+                <div class="stat-label">Scripts</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="stat-voices">-</div>
+                <div class="stat-label">Voices</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="stat-projects">-</div>
+                <div class="stat-label">Podcasts</div>
+            </div>
+        </div>
+
+        <div class="workflow-guide">
+            <h2>How it works</h2>
+            <div class="workflow-steps">
+                <div class="workflow-step">
+                    <div class="workflow-icon">1</div>
+                    <div class="workflow-body">
+                        <strong>Create a Script</strong>
+                        <span>Turn a Medium article into a podcast dialog</span>
+                    </div>
+                    <a href="/scripts" class="btn small primary">Browse Scripts</a>
                 </div>
-                <div id="hero-status" class="status-text hidden"></div>
+                <div class="workflow-arrow">&rarr;</div>
+                <div class="workflow-step">
+                    <div class="workflow-icon">2</div>
+                    <div class="workflow-body">
+                        <strong>Prepare Voices</strong>
+                        <span>Clone from audio or design from text</span>
+                    </div>
+                    <a href="/voices" class="btn small primary">Manage Voices</a>
+                </div>
+                <div class="workflow-arrow">&rarr;</div>
+                <div class="workflow-step">
+                    <div class="workflow-icon">3</div>
+                    <div class="workflow-body">
+                        <strong>Generate</strong>
+                        <span>Combine script + 2 voices in the Studio</span>
+                    </div>
+                    <a href="/studio" class="btn small primary">Open Studio</a>
+                </div>
             </div>
+        </div>
 
-            <div class="bento-card stat" id="stat-scripts-card">
-                <div class="bento-stat-number" id="stat-scripts">-</div>
-                <div class="bento-stat-label">Scripts</div>
+        <div class="dash-section" style="margin-top:32px">
+            <div class="list-header">
+                <h2>Recent Activity</h2>
+                <div class="activity-legend">
+                    <span class="legend-dot script"></span> Script
+                    <span class="legend-dot voice"></span> Voice
+                    <span class="legend-dot podcast"></span> Podcast
+                </div>
             </div>
-
-            <div class="bento-card stat" id="stat-voices-card">
-                <div class="bento-stat-number" id="stat-voices">-</div>
-                <div class="bento-stat-label">Voices</div>
-            </div>
-
-            <div class="bento-card stat" id="stat-projects-card">
-                <div class="bento-stat-number" id="stat-projects">-</div>
-                <div class="bento-stat-label">Podcasts</div>
-            </div>
-
-            <div class="bento-card">
-                <h3>Recent Scripts</h3>
-                <div id="recent-scripts" class="recent-scroll"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div>
-            </div>
-
-            <div class="bento-card">
-                <h3>Recent Voices</h3>
-                <div id="recent-voices" class="recent-scroll"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div>
-            </div>
-
-            <div class="bento-card wide">
-                <h3>Recent Podcasts</h3>
-                <div id="recent-projects" class="recent-scroll"><div class="skeleton skeleton-card"></div></div>
+            <div id="recent-activity" class="recent-scroll">
+                <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
             </div>
         </div>
     </div>
@@ -70,24 +92,28 @@
             animateNumber('stat-voices', d.voices_count);
             animateNumber('stat-projects', d.projects_count);
 
-            function renderList(elId, items, type) {
-                const el = document.getElementById(elId);
-                if (!items.length) { el.innerHTML = '<div class="empty-hint">Nothing here yet</div>'; return; }
-                el.innerHTML = items.map(i => {
-                    if (type === 'scripts') return `<a href="/scripts/${i.id}" class="recent-item"><span class="ri-title">${esc(i.article_title)}</span><span class="ri-date">${fmt(i.created_at)}</span></a>`;
-                    if (type === 'voices') return `<div class="recent-item"><span class="ri-type ${i.type}">${i.type}</span><span class="ri-title">${esc(i.name)}</span><span class="ri-date">${fmt(i.created_at)}</span></div>`;
-                    if (type === 'projects') return `<a href="/project/${i.id}" class="recent-item"><span class="ri-title">${esc(i.article_title)}</span><span class="ri-date">${fmt(i.created_at)}</span></a>`;
-                }).join('');
-            }
+            const activity = [];
+            d.recent_scripts.forEach(s => activity.push({ type: 'script', id: s.id, title: s.article_title, time: s.created_at }));
+            d.recent_voices.forEach(v => activity.push({ type: 'voice', title: v.name, desc: v.description, vtype: v.type, time: v.created_at }));
+            d.recent_projects.forEach(p => activity.push({ type: 'podcast', id: p.id, title: p.article_title, time: p.created_at }));
+            activity.sort((a, b) => new Date(b.time) - new Date(a.time));
+            const recent = activity.slice(0, 10);
 
-            renderList('recent-scripts', d.recent_scripts, 'scripts');
-            renderList('recent-voices', d.recent_voices, 'voices');
-            renderList('recent-projects', d.recent_projects, 'projects');
+            const el = document.getElementById('recent-activity');
+            if (!recent.length) {
+                el.innerHTML = '<div class="empty-hint">No activity yet. <a href="/scripts">Create your first script</a> to get started.</div>';
+                return;
+            }
+            el.innerHTML = recent.map(a => {
+                if (a.type === 'script') return `<a href="/scripts/${a.id}" class="recent-item"><span class="ri-dot script"></span><span class="ri-title">${esc(a.title)}</span><span class="ri-type-label">Script</span><span class="ri-date">${fmt(a.time)}</span></a>`;
+                if (a.type === 'voice') return `<div class="recent-item"><span class="ri-dot voice"></span><span class="ri-title">${esc(a.title)}</span><span class="ri-type-badge-clean ${a.vtype}">${a.vtype}</span><span class="ri-date">${fmt(a.time)}</span></div>`;
+                if (a.type === 'podcast') return `<a href="/project/${a.id}" class="recent-item"><span class="ri-dot podcast"></span><span class="ri-title">${esc(a.title)}</span><span class="ri-type-label">Podcast</span><span class="ri-date">${fmt(a.time)}</span></a>`;
+            }).join('');
         }
 
         function animateNumber(id, target) {
             const el = document.getElementById(id);
-            const duration = 800;
+            const duration = 600;
             const start = parseInt(el.textContent) || 0;
             if (start === target) { el.textContent = target; return; }
             const startTime = performance.now();
@@ -101,32 +127,7 @@
         }
 
         function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-        function fmt(d) { if (!d) return ''; const diff = Date.now() - new Date(d).getTime(); const m = Math.floor(diff / 60000); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago'; const h = Math.floor(m / 60); if (h < 24) return h + 'h ago'; const days = Math.floor(h / 24); if (days < 7) return days + 'd ago'; return new Date(d).toLocaleDateString(); }
-
-        document.getElementById('hero-generate-btn').addEventListener('click', async () => {
-            const url = document.getElementById('hero-url').value.trim();
-            if (!url) return;
-            const btn = document.getElementById('hero-generate-btn');
-            const status = document.getElementById('hero-status');
-            btn.disabled = true;
-            status.classList.remove('hidden');
-            status.innerHTML = '<span class="spinner" style="width:14px;height:14px;display:inline-block;margin-right:8px;"></span>Generating script...';
-            try {
-                const r = await fetch('/api/scripts/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-                const d = await r.json();
-                if (d.success) {
-                    status.innerHTML = '<span style="color:var(--success)">Script generated!</span> <a href="/scripts/' + d.id + '">View</a> | <a href="/studio?script=' + d.id + '">Use in Studio</a>';
-                    document.getElementById('hero-url').value = '';
-                    loadDashboard();
-                } else {
-                    status.textContent = 'Error: ' + (d.error || 'Unknown');
-                }
-            } catch (err) {
-                status.textContent = 'Error: ' + err.message;
-            } finally {
-                btn.disabled = false;
-            }
-        });
+        function fmt(d) { if (!d) return ''; const diff = Date.now() - new Date(d).getTime(); const m = Math.floor(diff / 60000); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago'; const h = Math.floor(m / 60); if (h < 24) return h + 'h ago'; if (Math.floor(h / 24) < 7) return Math.floor(h / 24) + 'd ago'; return new Date(d).toLocaleDateString(); }
 
         loadDashboard();
     </script>
