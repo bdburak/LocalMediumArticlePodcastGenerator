@@ -13,8 +13,9 @@
             <p class="subtitle">Transform Medium articles into audio podcasts</p>
             <nav class="top-nav">
                 <a href="/" class="nav-link active">New Podcast</a>
-                <a href="/projects" class="nav-link">History</a>
-            </nav>
+            <a href="/projects" class="nav-link">History</a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀</button>
+        </nav>
         </header>
 
         <div class="progress-bar">
@@ -172,5 +173,11 @@
     </div>
 
     <script src="/static/script.js"></script>
+
+    <script>
+function toggleTheme(){const e=document.documentElement,t=e.getAttribute("data-theme")||"dark",n="dark"===t?"light":"dark";e.setAttribute("data-theme",n),localStorage.setItem("theme",n),updateIcon(n)}
+function updateIcon(e){const t=document.querySelector(".theme-toggle");t&&(t.textContent="dark"===e?"☀":"🌙")}
+(function(){const e=localStorage.getItem("theme")||"dark";document.documentElement.setAttribute("data-theme",e),updateIcon(e)})();
+</script>
 </body>
 </html>

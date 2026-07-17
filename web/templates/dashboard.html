@@ -14,6 +14,7 @@
             <a href="/voices" class="nav-link">Voices</a>
             <a href="/studio" class="nav-link">Studio</a>
             <a href="/projects" class="nav-link">History</a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀</button>
         </nav>
 
         <div class="bento-grid">
@@ -129,5 +130,11 @@
 
         loadDashboard();
     </script>
+
+    <script>
+function toggleTheme(){const e=document.documentElement,t=e.getAttribute("data-theme")||"dark",n="dark"===t?"light":"dark";e.setAttribute("data-theme",n),localStorage.setItem("theme",n),updateIcon(n)}
+function updateIcon(e){const t=document.querySelector(".theme-toggle");t&&(t.textContent="dark"===e?"☀":"🌙")}
+(function(){const e=localStorage.getItem("theme")||"dark";document.documentElement.setAttribute("data-theme",e),updateIcon(e)})();
+</script>
 </body>
 </html>
