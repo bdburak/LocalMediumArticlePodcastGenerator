@@ -16,65 +16,116 @@
             <a href="/projects" class="nav-link">History</a>
         </nav>
 
-        <header>
-            <h1>Dashboard</h1>
-        </header>
-
-        <div class="stats-row" id="stats-row">
-            <div class="stat-card"><div class="stat-number" id="stat-scripts">-</div><div class="stat-label">Scripts</div></div>
-            <div class="stat-card"><div class="stat-number" id="stat-voices">-</div><div class="stat-label">Voices</div></div>
-            <div class="stat-card"><div class="stat-number" id="stat-projects">-</div><div class="stat-label">Podcasts</div></div>
-        </div>
-
-        <div class="quick-actions">
-            <a href="/scripts" class="btn primary">+ New Script</a>
-            <a href="/voices" class="btn secondary">+ Create Voice</a>
-            <a href="/studio" class="btn secondary">Generate Podcast</a>
-        </div>
-
-        <div class="dashboard-sections">
-            <div class="dash-section">
-                <h2>Recent Scripts</h2>
-                <div id="recent-scripts" class="recent-list"></div>
+        <div class="bento-grid">
+            <div class="bento-card hero">
+                <h2>Create a New Script</h2>
+                <p class="subtitle">Transform any Medium article into a podcast conversation.</p>
+                <input type="url" id="hero-url" class="hero-input" placeholder="Paste a Medium article URL...">
+                <div class="hero-actions">
+                    <button id="hero-generate-btn" class="btn primary">Generate Script</button>
+                    <a href="/scripts" class="btn secondary">Browse Scripts</a>
+                </div>
+                <div id="hero-status" class="status-text hidden"></div>
             </div>
-            <div class="dash-section">
-                <h2>Recent Voices</h2>
-                <div id="recent-voices" class="recent-list"></div>
+
+            <div class="bento-card stat" id="stat-scripts-card">
+                <div class="bento-stat-number" id="stat-scripts">-</div>
+                <div class="bento-stat-label">Scripts</div>
             </div>
-            <div class="dash-section">
-                <h2>Recent Podcasts</h2>
-                <div id="recent-projects" class="recent-list"></div>
+
+            <div class="bento-card stat" id="stat-voices-card">
+                <div class="bento-stat-number" id="stat-voices">-</div>
+                <div class="bento-stat-label">Voices</div>
+            </div>
+
+            <div class="bento-card stat" id="stat-projects-card">
+                <div class="bento-stat-number" id="stat-projects">-</div>
+                <div class="bento-stat-label">Podcasts</div>
+            </div>
+
+            <div class="bento-card">
+                <h3>Recent Scripts</h3>
+                <div id="recent-scripts" class="recent-scroll"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div>
+            </div>
+
+            <div class="bento-card">
+                <h3>Recent Voices</h3>
+                <div id="recent-voices" class="recent-scroll"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div>
+            </div>
+
+            <div class="bento-card wide">
+                <h3>Recent Podcasts</h3>
+                <div id="recent-projects" class="recent-scroll"><div class="skeleton skeleton-card"></div></div>
             </div>
         </div>
     </div>
 
     <script>
         async function loadDashboard() {
-            try {
-                const resp = await fetch('/api/dashboard');
-                const d = await resp.json();
-                document.getElementById('stat-scripts').textContent = d.scripts_count;
-                document.getElementById('stat-voices').textContent = d.voices_count;
-                document.getElementById('stat-projects').textContent = d.projects_count;
+            const resp = await fetch('/api/dashboard');
+            const d = await resp.json();
 
-                function renderList(elId, items, type) {
-                    const el = document.getElementById(elId);
-                    if (!items.length) { el.innerHTML = '<div class="empty-hint">None yet</div>'; return; }
-                    el.innerHTML = items.map(i => {
-                        if (type === 'scripts') return `<a href="/scripts/${i.id}" class="recent-item"><span class="ri-title">${esc(i.article_title)}</span><span class="ri-date">${formatDate(i.created_at)}</span></a>`;
-                        if (type === 'voices') return `<div class="recent-item"><span class="ri-type ${i.type}">${i.type}</span><span class="ri-title">${esc(i.name)}</span><span class="ri-date">${formatDate(i.created_at)}</span></div>`;
-                        if (type === 'projects') return `<a href="/project/${i.id}" class="recent-item"><span class="ri-title">${esc(i.article_title)}</span><span class="ri-date">${formatDate(i.created_at)}</span></a>`;
-                    }).join('');
-                }
+            animateNumber('stat-scripts', d.scripts_count);
+            animateNumber('stat-voices', d.voices_count);
+            animateNumber('stat-projects', d.projects_count);
 
-                renderList('recent-scripts', d.recent_scripts, 'scripts');
-                renderList('recent-voices', d.recent_voices, 'voices');
-                renderList('recent-projects', d.recent_projects, 'projects');
-            } catch (err) { console.error(err); }
+            function renderList(elId, items, type) {
+                const el = document.getElementById(elId);
+                if (!items.length) { el.innerHTML = '<div class="empty-hint">Nothing here yet</div>'; return; }
+                el.innerHTML = items.map(i => {
+                    if (type === 'scripts') return `<a href="/scripts/${i.id}" class="recent-item"><span class="ri-title">${esc(i.article_title)}</span><span class="ri-date">${fmt(i.created_at)}</span></a>`;
+                    if (type === 'voices') return `<div class="recent-item"><span class="ri-type ${i.type}">${i.type}</span><span class="ri-title">${esc(i.name)}</span><span class="ri-date">${fmt(i.created_at)}</span></div>`;
+                    if (type === 'projects') return `<a href="/project/${i.id}" class="recent-item"><span class="ri-title">${esc(i.article_title)}</span><span class="ri-date">${fmt(i.created_at)}</span></a>`;
+                }).join('');
+            }
+
+            renderList('recent-scripts', d.recent_scripts, 'scripts');
+            renderList('recent-voices', d.recent_voices, 'voices');
+            renderList('recent-projects', d.recent_projects, 'projects');
+        }
+
+        function animateNumber(id, target) {
+            const el = document.getElementById(id);
+            const duration = 800;
+            const start = parseInt(el.textContent) || 0;
+            if (start === target) { el.textContent = target; return; }
+            const startTime = performance.now();
+            function step(now) {
+                const progress = Math.min((now - startTime) / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                el.textContent = Math.round(start + (target - start) * eased);
+                if (progress < 1) requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
         }
 
         function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-        function formatDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString(); }
+        function fmt(d) { if (!d) return ''; return new Date(d).toLocaleDateString(); }
+
+        document.getElementById('hero-generate-btn').addEventListener('click', async () => {
+            const url = document.getElementById('hero-url').value.trim();
+            if (!url) return;
+            const btn = document.getElementById('hero-generate-btn');
+            const status = document.getElementById('hero-status');
+            btn.disabled = true;
+            status.classList.remove('hidden');
+            status.innerHTML = '<span class="spinner" style="width:14px;height:14px;display:inline-block;margin-right:8px;"></span>Generating script...';
+            try {
+                const r = await fetch('/api/scripts/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+                const d = await r.json();
+                if (d.success) {
+                    status.innerHTML = '<span style="color:var(--success)">Script generated!</span> <a href="/scripts/' + d.id + '">View</a> | <a href="/studio?script=' + d.id + '">Use in Studio</a>';
+                    document.getElementById('hero-url').value = '';
+                    loadDashboard();
+                } else {
+                    status.textContent = 'Error: ' + (d.error || 'Unknown');
+                }
+            } catch (err) {
+                status.textContent = 'Error: ' + err.message;
+            } finally {
+                btn.disabled = false;
+            }
+        });
 
         loadDashboard();
     </script>
