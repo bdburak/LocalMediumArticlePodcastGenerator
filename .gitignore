@@ -205,3 +205,6 @@ web/uploads/ref_voices/
 # Opencode / Superpowers
 .opencode/
 AGENTS.md
+
+# Web app runtime data
+web/data/

@@ -53,6 +53,31 @@ def index():
     return render_template("index.html", stage=session.get("stage", 1))
 
 
+@app.route("/projects")
+def projects_page():
+    projects = load_projects()
+    return render_template("projects.html", projects_json=json.dumps(
+        [
+            {
+                "id": p["id"],
+                "article_url": p.get("article_url", ""),
+                "article_title": p.get("article_title", "Untitled"),
+                "created_at": p.get("created_at", ""),
+                "podcast_file": p.get("podcast_file", ""),
+            }
+            for p in projects
+        ]
+    ))
+
+
+@app.route("/project/<project_id>")
+def project_page(project_id):
+    project = get_project(project_id)
+    if not project:
+        return "Project not found", 404
+    return render_template("project.html", project=project)
+
+
 @app.route("/api/fetch-article", methods=["POST"])
 def api_fetch_article():
     data = request.get_json()
@@ -248,6 +273,7 @@ def api_generate_podcast():
     )
 
     _saved = False
+    _article_url = session.get("article_url", "")
 
     def generate():
         nonlocal _saved
@@ -276,7 +302,7 @@ def api_generate_podcast():
                     _saved = True
                     save_project({
                         "id": jid,
-                        "article_url": session.get("article_url", ""),
+                        "article_url": _article_url,
                         "article_title": dialog.get("title", ""),
                         "podcast_file": podcast_file,
                         "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),

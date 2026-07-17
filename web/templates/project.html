@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project.article_title or 'Project' }} — AI Podcast Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Podcast Generator</h1>
+            <nav class="top-nav">
+                <a href="/" class="nav-link">New Podcast</a>
+                <a href="/projects" class="nav-link">History</a>
+            </nav>
+        </header>
+
+        <div class="content">
+            <a href="/projects" class="back-link">&larr; Back to History</a>
+
+            <div class="project-detail">
+                <h2 class="project-title">{{ project.article_title or 'Untitled' }}</h2>
+                <div class="project-meta">
+                    <span>{{ project.created_at or '' }}</span>
+                    {% if project.article_url %}
+                    <a href="{{ project.article_url }}" target="_blank" rel="noopener" class="article-link">Open article &nearr;</a>
+                    {% endif %}
+                </div>
+
+                {% if project.podcast_file %}
+                <div class="audio-player-full">
+                    <audio controls src="/static/podcasts/{{ project.podcast_file }}">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+                {% endif %}
+
+                {% if project.dialog and project.dialog.script %}
+                <div class="script-section">
+                    <h3>Script</h3>
+                    <div class="script-body">
+                        {% for entry in project.dialog.script %}
+                        <div class="dialog-entry {{ 'speaker-b' if entry.speaker == 'Host_B' else 'speaker-a' }}">
+                            <div class="speaker-label">{{ 'Speaker B' if entry.speaker == 'Host_B' else 'Speaker A' }}</div>
+                            <div class="dialog-text">{{ entry.text }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="project-actions">
+                    <button id="delete-btn" class="btn secondary" data-id="{{ project.id }}">Delete Project</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('delete-btn').addEventListener('click', async function() {
+            if (!confirm('Delete this project?')) return;
+            try {
+                await fetch('/api/projects/' + this.dataset.id, { method: 'DELETE' });
+                window.location.href = '/projects';
+            } catch (err) {
+                alert('Failed to delete: ' + err.message);
+            }
+        });
+    </script>
+</body>
+</html>

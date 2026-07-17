@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History — AI Podcast Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Podcast Generator</h1>
+            <nav class="top-nav">
+                <a href="/" class="nav-link">New Podcast</a>
+                <a href="/projects" class="nav-link active">History</a>
+            </nav>
+        </header>
+
+        <div class="content">
+            <div class="projects-header">
+                <h2>Previous Podcasts</h2>
+                <input type="text" id="search-input" class="search-bar" placeholder="Search by title or URL..." autofocus>
+            </div>
+
+            <div id="projects-list" class="projects-list"></div>
+            <div id="no-results" class="empty-state hidden">No podcasts found.</div>
+        </div>
+    </div>
+
+    <script>
+        const allProjects = {{ projects_json | safe }};
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function renderProjects(projects) {
+            const list = document.getElementById('projects-list');
+            const noResults = document.getElementById('no-results');
+
+            if (!projects.length) {
+                list.innerHTML = '';
+                noResults.classList.remove('hidden');
+                return;
+            }
+
+            noResults.classList.add('hidden');
+            list.innerHTML = projects.map(p => {
+                const date = p.created_at ? new Date(p.created_at).toLocaleDateString() : '';
+                const url = p.article_url || '';
+                return `
+                    <a href="/project/${p.id}" class="project-card">
+                        <div class="card-info">
+                            <div class="card-title">${escapeHtml(p.article_title || 'Untitled')}</div>
+                            <div class="card-meta">
+                                <span>${date}</span>
+                                ${url ? `<span class="card-url">${escapeHtml(url)}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="card-arrow">&rarr;</div>
+                    </a>
+                `;
+            }).join('');
+        }
+
+        function filterProjects() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filtered = allProjects.filter(p => {
+                const title = (p.article_title || '').toLowerCase();
+                const url = (p.article_url || '').toLowerCase();
+                return title.includes(query) || url.includes(query);
+            });
+            renderProjects(filtered);
+        }
+
+        document.getElementById('search-input').addEventListener('input', filterProjects);
+        renderProjects(allProjects);
+    </script>
+</body>
+</html>
