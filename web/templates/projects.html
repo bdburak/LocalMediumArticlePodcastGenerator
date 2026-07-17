@@ -16,75 +16,71 @@
             <a href="/projects" class="nav-link active">History</a>
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀</button>
         </nav>
+
         <header>
-            <h1>AI Podcast Generator</h1>
-            <nav class="top-nav">
-                <a href="/" class="nav-link">New Podcast</a>
-                <a href="/projects" class="nav-link active">History</a>
-            </nav>
+            <h1>History</h1>
+            <p class="subtitle">Your generated podcasts.</p>
         </header>
 
-        <div class="content">
-            <div class="projects-header">
-                <h2>Previous Podcasts</h2>
-                <input type="text" id="search-input" class="search-bar" placeholder="Search by title or URL..." autofocus>
-            </div>
-
-            <div id="projects-list" class="projects-list"></div>
-            <div id="no-results" class="empty-state hidden">No podcasts found.</div>
+        <div class="list-header">
+            <h2 id="project-count">— podcasts</h2>
+            <input type="text" id="search-input" class="search-bar" placeholder="Filter by title or URL..." style="max-width:280px">
         </div>
+
+        <div id="projects-list" class="section-list"></div>
+        <div id="no-results" class="empty-state-scripts hidden">No podcasts match your search.</div>
     </div>
 
     <script>
-        const allProjects = {{ projects_json | safe }};
+        let allProjects = [];
 
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
+        async function loadProjects() {
+            const resp = await fetch('/api/projects');
+            allProjects = await resp.json();
+            document.getElementById('project-count').textContent = `${allProjects.length} podcast${allProjects.length !== 1 ? 's' : ''}`;
+            renderProjects(allProjects);
         }
 
         function renderProjects(projects) {
             const list = document.getElementById('projects-list');
             const noResults = document.getElementById('no-results');
-
-            if (!projects.length) {
-                list.innerHTML = '';
-                noResults.classList.remove('hidden');
-                return;
-            }
-
+            if (!projects.length) { list.innerHTML = ''; noResults.classList.remove('hidden'); return; }
             noResults.classList.add('hidden');
             list.innerHTML = projects.map(p => {
-                const date = p.created_at ? new Date(p.created_at).toLocaleDateString() : '';
-                const url = p.article_url || '';
+                const date = relativeTime(p.created_at);
+                const host = p.article_url ? new URL(p.article_url).hostname : '';
                 return `
-                    <a href="/project/${p.id}" class="project-card">
-                        <div class="card-info">
-                            <div class="card-title">${escapeHtml(p.article_title || 'Untitled')}</div>
-                            <div class="card-meta">
-                                <span>${date}</span>
-                                ${url ? `<span class="card-url">${escapeHtml(url)}</span>` : ''}
+                    <div class="script-card-full">
+                        <a href="/project/${p.id}" class="script-card-body" style="text-decoration:none;color:inherit;">
+                            <div class="script-card-top">
+                                <h3 class="script-card-title">${esc(p.article_title)}</h3>
                             </div>
+                            <div class="script-card-meta">
+                                <span class="script-card-date">${date}</span>
+                                <span class="script-card-host">${host}</span>
+                            </div>
+                        </a>
+                        <div class="script-card-actions">
+                            <a href="/project/${p.id}" class="btn small primary">Listen</a>
                         </div>
-                        <div class="card-arrow">&rarr;</div>
-                    </a>
+                    </div>
                 `;
             }).join('');
         }
 
-        function filterProjects() {
-            const query = document.getElementById('search-input').value.toLowerCase();
-            const filtered = allProjects.filter(p => {
-                const title = (p.article_title || '').toLowerCase();
-                const url = (p.article_url || '').toLowerCase();
-                return title.includes(query) || url.includes(query);
-            });
+        document.getElementById('search-input').addEventListener('input', () => {
+            const q = document.getElementById('search-input').value.toLowerCase();
+            const filtered = q ? allProjects.filter(p =>
+                (p.article_title || '').toLowerCase().includes(q) ||
+                (p.article_url || '').toLowerCase().includes(q)
+            ) : allProjects;
             renderProjects(filtered);
-        }
+        });
 
-        document.getElementById('search-input').addEventListener('input', filterProjects);
-        renderProjects(allProjects);
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+        function relativeTime(dateStr) { if (!dateStr) return ''; const diff = Date.now() - new Date(dateStr).getTime(); const m = Math.floor(diff / 60000); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago'; const h = Math.floor(m / 60); if (h < 24) return h + 'h ago'; if (Math.floor(h / 24) < 7) return Math.floor(h / 24) + 'd ago'; return new Date(dateStr).toLocaleDateString(); }
+
+        loadProjects();
     </script>
 
     <script>

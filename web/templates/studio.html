@@ -19,41 +19,55 @@
 
         <header>
             <h1>Podcast Studio</h1>
-            <p class="subtitle">Combine a script with two voices to generate a podcast.</p>
+            <p class="subtitle">Choose a script and two voices, then generate your podcast.</p>
         </header>
 
-        <div class="studio-form">
-            <div class="studio-field">
-                <label>Script</label>
-                <select id="script-select" class="studio-select">
-                    <option value="">-- Select a script --</option>
-                </select>
-            </div>
-            <div class="studio-row">
-                <div class="studio-field">
-                    <label>Speaker A Voice</label>
-                    <select id="voice-a-select" class="studio-select">
-                        <option value="">-- Select voice --</option>
-                    </select>
-                </div>
-                <div class="studio-field">
-                    <label>Speaker B Voice</label>
-                    <select id="voice-b-select" class="studio-select">
-                        <option value="">-- Select voice --</option>
-                    </select>
+        <div class="studio-layout">
+            <div class="studio-card">
+                <div class="studio-card-icon">1</div>
+                <div class="studio-card-body">
+                    <label class="studio-label">Script</label>
+                    <div class="studio-select-wrapper">
+                        <select id="script-select" class="studio-select"></select>
+                        <div id="script-preview" class="studio-preview hidden">
+                            <span id="script-preview-title"></span>
+                            <span id="script-preview-turns"></span>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <button id="generate-btn" class="btn primary" disabled style="width:100%">Generate Podcast</button>
+
+            <div class="studio-row-cards">
+                <div class="studio-card">
+                    <div class="studio-card-icon">A</div>
+                    <div class="studio-card-body">
+                        <label class="studio-label">Speaker A Voice</label>
+                        <select id="voice-a-select" class="studio-select"></select>
+                    </div>
+                </div>
+                <div class="studio-card">
+                    <div class="studio-card-icon">B</div>
+                    <div class="studio-card-body">
+                        <label class="studio-label">Speaker B Voice</label>
+                        <select id="voice-b-select" class="studio-select"></select>
+                    </div>
+                </div>
+            </div>
+
+            <button id="generate-btn" class="btn primary btn-large" disabled>
+                <span id="generate-btn-text">Select script and both voices to start</span>
+            </button>
         </div>
 
         <div id="gen-status" class="status-panel hidden">
-            <h3>Generating...</h3>
+            <h3>Generating Your Podcast</h3>
             <ul id="gen-steps"></ul>
         </div>
 
         <div id="gen-complete" class="complete-panel hidden">
             <span class="checkmark">&#10003;</span>
             <span>Podcast generated!</span>
+            <a id="gen-project-link" href="#" class="btn small primary" style="margin-left:auto">View Project</a>
         </div>
 
         <div id="audio-player" class="audio-player-full hidden">
@@ -62,21 +76,24 @@
     </div>
 
     <script>
+        let scriptsData = [];
+        let voicesData = [];
+
         async function loadSelects() {
             try {
                 const [scriptsResp, voicesResp] = await Promise.all([
                     fetch('/api/scripts'),
                     fetch('/api/voices/library'),
                 ]);
-                const scripts = await scriptsResp.json();
-                const voices = await voicesResp.json();
+                scriptsData = await scriptsResp.json();
+                voicesData = await voicesResp.json();
 
+                const scriptEmpty = '<option value="">-- Select a script --</option>';
                 const ss = document.getElementById('script-select');
-                ss.innerHTML = '<option value="">-- Select a script --</option>' +
-                    scripts.map(s => `<option value="${s.id}">${esc(s.article_title)}</option>`).join('');
+                ss.innerHTML = scriptEmpty + scriptsData.map(s => `<option value="${s.id}">${esc(s.article_title)} (${s.turns || 0} turns)</option>`).join('');
 
-                const voiceOpts = '<option value="">-- Select voice --</option>' +
-                    voices.map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${v.type})</option>`).join('');
+                const voiceEmpty = '<option value="">-- Select a voice --</option>';
+                const voiceOpts = voiceEmpty + voicesData.map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${v.type})</option>`).join('');
                 document.getElementById('voice-a-select').innerHTML = voiceOpts;
                 document.getElementById('voice-b-select').innerHTML = voiceOpts;
 
@@ -90,34 +107,61 @@
         }
 
         function checkGenerate() {
-            const s = document.getElementById('script-select').value;
-            const a = document.getElementById('voice-a-select').value;
-            const b = document.getElementById('voice-b-select').value;
-            document.getElementById('generate-btn').disabled = !(s && a && b);
+            const sid = document.getElementById('script-select').value;
+            const va = document.getElementById('voice-a-select').value;
+            const vb = document.getElementById('voice-b-select').value;
+            const btn = document.getElementById('generate-btn');
+            const btnText = document.getElementById('generate-btn-text');
+
+            if (sid && va && vb) {
+                btn.disabled = false;
+                btnText.textContent = 'Generate Podcast';
+            } else {
+                btn.disabled = true;
+                const missing = [];
+                if (!sid) missing.push('script');
+                if (!va) missing.push('Speaker A');
+                if (!vb) missing.push('Speaker B');
+                btnText.textContent = missing.length === 3 ? 'Select script and both voices' : 'Select ' + missing.join(', ');
+            }
+
+            if (sid) {
+                const s = scriptsData.find(x => x.id === sid);
+                const preview = document.getElementById('script-preview');
+                if (s) {
+                    document.getElementById('script-preview-title').textContent = s.article_title;
+                    document.getElementById('script-preview-turns').textContent = (s.turns || 0) + ' turns';
+                    preview.classList.remove('hidden');
+                } else {
+                    preview.classList.add('hidden');
+                }
+            }
         }
 
         async function handleGenerate() {
             const btn = document.getElementById('generate-btn');
+            const btnText = document.getElementById('generate-btn-text');
             const status = document.getElementById('gen-status');
             const steps = document.getElementById('gen-steps');
             const complete = document.getElementById('gen-complete');
             const player = document.getElementById('audio-player');
+            const link = document.getElementById('gen-project-link');
 
             btn.disabled = true;
+            btnText.textContent = 'Generating...';
             status.classList.remove('hidden');
             complete.classList.add('hidden');
             player.classList.add('hidden');
             steps.innerHTML = '';
 
-            const scriptId = document.getElementById('script-select').value;
-            const voiceA = document.getElementById('voice-a-select').value;
-            const voiceB = document.getElementById('voice-b-select').value;
-
             try {
                 const resp = await fetch('/api/studio/generate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ script_id: scriptId, voice_a_name: voiceA, voice_b_name: voiceB }),
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        script_id: document.getElementById('script-select').value,
+                        voice_a_name: document.getElementById('voice-a-select').value,
+                        voice_b_name: document.getElementById('voice-b-select').value,
+                    }),
                 });
 
                 const reader = resp.body.getReader();
@@ -137,10 +181,12 @@
                             document.getElementById('final-audio').load();
                             player.classList.remove('hidden');
                             complete.classList.remove('hidden');
+                            link.href = '/project/' + d.project_id;
                             btn.disabled = false;
+                            btnText.textContent = 'Generate Another';
                             return;
                         }
-                        if (d.status === 'failed') { li.classList.add('done'); li.style.color = 'var(--error)'; steps.appendChild(li); btn.disabled = false; return; }
+                        if (d.status === 'failed') { li.classList.add('done'); li.style.color = 'var(--error)'; steps.appendChild(li); btn.disabled = false; btnText.textContent = 'Generate Podcast'; return; }
                         li.classList.add('current');
                         const prev = steps.querySelector('.current');
                         if (prev) { prev.classList.remove('current'); prev.classList.add('done'); }
@@ -153,6 +199,7 @@
                 li.style.color = 'var(--error)';
                 steps.appendChild(li);
                 btn.disabled = false;
+                btnText.textContent = 'Generate Podcast';
             }
         }
 
