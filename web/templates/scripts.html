@@ -19,44 +19,68 @@
 
         <header>
             <h1>Scripts</h1>
+            <p class="subtitle">Generate podcast scripts from Medium articles.</p>
         </header>
 
-        <div id="create-form" class="create-form">
-            <div class="form-group-inline">
-                <input type="url" id="article-url" placeholder="https://medium.com/@user/article-title" class="search-bar" style="flex:1">
+        <div class="create-prompt-card">
+            <input type="url" id="article-url" class="hero-input" placeholder="Paste a Medium article URL to turn it into a podcast script...">
+            <div class="hero-actions">
                 <button id="generate-btn" class="btn primary">Generate Script</button>
             </div>
             <div id="gen-status" class="status-text hidden"></div>
+        </div>
+
+        <div class="list-header">
+            <h2 id="script-count">0 scripts</h2>
+            <input type="text" id="filter-input" class="search-bar" placeholder="Filter by title..." style="max-width:260px">
         </div>
 
         <div class="section-list" id="scripts-list"></div>
     </div>
 
     <script>
+        let allScripts = [];
+
         async function loadScripts() {
             const resp = await fetch('/api/scripts');
-            const scripts = await resp.json();
+            allScripts = await resp.json();
+            document.getElementById('script-count').textContent = `${allScripts.length} script${allScripts.length !== 1 ? 's' : ''}`;
+            renderList(allScripts);
+        }
+
+        function renderList(scripts) {
             const list = document.getElementById('scripts-list');
-            if (!scripts.length) { list.innerHTML = '<div class="empty-hint">No scripts yet. Generate one from a Medium article URL above.</div>'; return; }
+            if (!scripts.length) {
+                list.innerHTML = '<div class="empty-state-scripts">No scripts yet. Paste a Medium article URL above to create your first one.</div>';
+                return;
+            }
             list.innerHTML = scripts.map(s => `
-                <div class="script-row" data-id="${s.id}">
-                    <a href="/scripts/${s.id}" class="script-link">
-                        <span class="script-title">${esc(s.article_title)}</span>
-                        <span class="script-url">${esc(s.article_url)}</span>
-                        <span class="script-date">${formatDate(s.created_at)}</span>
-                    </a>
-                    <div class="script-actions">
-                        <a href="/studio?script=${s.id}" class="btn small secondary">Use in Studio</a>
-                        <button class="btn small icon delete-script-btn" data-id="${s.id}">&times;</button>
+                <div class="script-card-full">
+                    <div class="script-card-body" onclick="window.location.href='/scripts/${s.id}'" style="cursor:pointer">
+                        <div class="script-card-top">
+                            <h3 class="script-card-title">${esc(s.article_title)}</h3>
+                            <span class="script-card-turns">${s.turns ? s.turns + ' turns' : ''}</span>
+                        </div>
+                        <div class="script-card-meta">
+                            <span class="script-card-date">${relativeTime(s.created_at)}</span>
+                            <span class="script-card-host">${esc(s.article_url ? new URL(s.article_url).hostname : '')}</span>
+                        </div>
+                    </div>
+                    <div class="script-card-actions">
+                        <a href="/studio?script=${s.id}" class="btn small primary">Use in Studio</a>
+                        <button class="btn small icon delete-script-btn" data-id="${s.id}" title="Delete script">&#10005;</button>
                     </div>
                 </div>
             `).join('');
-            document.querySelectorAll('.delete-script-btn').forEach(b => b.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (!confirm('Delete this script?')) return;
-                await fetch(`/api/scripts/${b.dataset.id}`, { method: 'DELETE' });
-                loadScripts();
-            }));
+
+            document.querySelectorAll('.delete-script-btn').forEach(b => {
+                b.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (!confirm('Delete this script?')) return;
+                    await fetch(`/api/scripts/${b.dataset.id}`, { method: 'DELETE' });
+                    loadScripts();
+                });
+            });
         }
 
         document.getElementById('generate-btn').addEventListener('click', async () => {
@@ -66,32 +90,46 @@
             const status = document.getElementById('gen-status');
             btn.disabled = true;
             status.classList.remove('hidden');
-            status.textContent = 'Generating script...';
+            status.innerHTML = '<span class="spinner" style="width:14px;height:14px;display:inline-block;margin-right:8px;"></span> Generating script — this takes about 30 seconds...';
 
             try {
                 const resp = await fetch('/api/scripts/create', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url }),
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }),
                 });
                 const data = await resp.json();
                 if (data.success) {
-                    status.textContent = 'Script generated!';
+                    status.innerHTML = '<span style="color:var(--success)">Script generated!</span> <a href="/scripts/' + data.id + '">View</a> | <a href="/studio?script=' + data.id + '">Use in Studio</a>';
                     document.getElementById('article-url').value = '';
                     loadScripts();
                 } else {
-                    status.textContent = 'Error: ' + (data.error || 'Unknown');
+                    status.textContent = 'Error: ' + (data.error || 'Failed');
                 }
             } catch (err) {
                 status.textContent = 'Error: ' + err.message;
             } finally {
                 btn.disabled = false;
-                setTimeout(() => status.classList.add('hidden'), 3000);
             }
         });
 
+        document.getElementById('filter-input').addEventListener('input', () => {
+            const q = document.getElementById('filter-input').value.toLowerCase();
+            renderList(q ? allScripts.filter(s => s.article_title.toLowerCase().includes(q)) : allScripts);
+        });
+
         function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-        function formatDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString(); }
+
+        function relativeTime(dateStr) {
+            if (!dateStr) return '';
+            const diff = Date.now() - new Date(dateStr).getTime();
+            const mins = Math.floor(diff / 60000);
+            if (mins < 1) return 'just now';
+            if (mins < 60) return `${mins}m ago`;
+            const hours = Math.floor(mins / 60);
+            if (hours < 24) return `${hours}h ago`;
+            const days = Math.floor(hours / 24);
+            if (days < 7) return `${days}d ago`;
+            return new Date(dateStr).toLocaleDateString();
+        }
 
         loadScripts();
     </script>

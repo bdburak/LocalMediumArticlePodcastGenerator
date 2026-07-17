@@ -533,12 +533,59 @@ textarea { resize: vertical; min-height: 80px; }
 .studio-select:focus { border-color: var(--accent); }
 
 /* === Script pages === */
+.create-prompt-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 28px;
+}
+
+.list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.list-header h2 { font-size: 0.95rem; margin: 0; }
+
+.script-card-full {
+    display: flex;
+    align-items: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 22px;
+    margin-bottom: 8px;
+    transition: all var(--transition);
+}
+.script-card-full:hover { border-color: var(--border-light); box-shadow: var(--shadow); }
+
+.script-card-body { flex: 1; min-width: 0; }
+.script-card-top { display: flex; align-items: baseline; gap: 10px; }
+.script-card-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); }
+.script-card-turns { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }
+.script-card-meta { display: flex; gap: 14px; margin-top: 6px; }
+.script-card-date { font-size: 0.76rem; color: var(--text-muted); }
+.script-card-host { font-size: 0.72rem; color: var(--accent); opacity: 0.7; }
+
+.script-card-actions { display: flex; gap: 8px; flex-shrink: 0; margin-left: 16px; }
+
+.empty-state-scripts {
+    padding: 48px 24px; text-align: center;
+    color: var(--text-muted); font-size: 0.92rem;
+    background: var(--bg-tertiary); border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+}
+
 .form-group-inline { display: flex; gap: 10px; }
 .create-form { margin-bottom: 28px; }
 
 .status-text {
-    margin-top: 8px; padding: 10px 16px;
-    background: var(--bg-tertiary); border-radius: var(--radius-sm);
+    margin-top: 10px; padding: 10px 14px;
+    background: var(--bg-secondary); border-radius: var(--radius-sm);
     font-size: 0.85rem; color: var(--text-secondary);
 }
 

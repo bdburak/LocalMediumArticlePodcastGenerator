@@ -22,6 +22,7 @@ def load_scripts():
                     "article_url": s.get("article_url", ""),
                     "article_title": s.get("article_title", "Untitled"),
                     "created_at": s.get("created_at", ""),
+                    "turns": s.get("turns", 0),
                 })
     scripts.sort(key=lambda s: s.get("created_at", ""), reverse=True)
     return scripts

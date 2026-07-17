@@ -563,6 +563,7 @@ def api_script_create():
         "article_url": url,
         "article_title": dialog.get("title", ""),
         "dialog": dialog,
+        "turns": len(dialog.get("script", [])),
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     })
 
