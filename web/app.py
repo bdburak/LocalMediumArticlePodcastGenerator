@@ -133,7 +133,7 @@ def api_upload_reference():
                 f"{TTS_API_URL}/voices",
                 files={"audio_sample": (local_filename, f, "audio/wav")},
                 data={"name": voice_name, "ref_text": transcript},
-                timeout=120,
+            timeout=600,
             )
         if resp.status_code != 200:
             return jsonify({"error": f"TTS server error: {resp.text}"}), 500

@@ -98,7 +98,7 @@ def create_voice_design(request: VoiceDesignRequest):
     )
 
     clone_items = tts.model.create_voice_clone_prompt(
-        ref_audio=wavs[0],
+        ref_audio=(wavs[0], sr),
         ref_text=test_phrase,
     )
 
