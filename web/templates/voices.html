@@ -66,7 +66,15 @@
         </div>
 
         <div id="test-audio-section" class="test-audio hidden">
-            <h3>Voice Preview</h3>
+            <h3>Voice Preview — <span id="test-voice-name"></span></h3>
+            <div class="form-group-inline" style="margin-bottom:12px">
+                <input type="text" id="test-text-input" class="search-bar" style="flex:1" value="Hello, this is a voice preview." placeholder="Custom text to speak...">
+                <button id="test-play-btn" class="btn primary">Play</button>
+            </div>
+            <div id="test-loading" class="loading hidden">
+                <div class="spinner"></div>
+                <span>Generating audio...</span>
+            </div>
             <audio id="test-audio" controls></audio>
             <button id="close-test-btn" class="btn secondary">Close</button>
         </div>
@@ -76,6 +84,7 @@
         let allVoices = [];
         let createMode = 'clone';
         let createFile = null;
+        let currentTestVoice = null;
 
         async function loadVoices() {
             try {
@@ -92,27 +101,42 @@
                             <span class="voice-row-date">${formatDate(v.created_at)}</span>
                         </div>
                         <div class="voice-row-actions">
-                            <button class="btn small secondary test-voice-btn" data-name="${esc(v.name)}">Test</button>
-                            <button class="btn small icon delete-voice-btn" data-name="${esc(v.name)}">&times;</button>
+                            <button class="btn small secondary test-voice-btn" data-name="${escAttr(v.name)}">Test</button>
+                            <button class="btn small icon delete-voice-btn" data-name="${escAttr(v.name)}">&times;</button>
                         </div>
                     </div>
                 `).join('');
 
-                document.querySelectorAll('.test-voice-btn').forEach(b => b.addEventListener('click', () => testVoice(b.dataset.name)));
+                document.querySelectorAll('.test-voice-btn').forEach(b => b.addEventListener('click', () => openTestPanel(b.dataset.name)));
                 document.querySelectorAll('.delete-voice-btn').forEach(b => b.addEventListener('click', () => deleteVoice(b.dataset.name)));
             } catch (err) { console.error(err); }
         }
 
-        async function testVoice(name) {
-            const section = document.getElementById('test-audio-section');
+        function openTestPanel(name) {
+            currentTestVoice = name;
+            document.getElementById('test-voice-name').textContent = name;
+            document.getElementById('test-text-input').value = 'Hello, this is a voice preview.';
+            document.getElementById('test-audio').src = '#';
+            document.getElementById('test-loading').classList.add('hidden');
+            document.getElementById('test-audio-section').classList.remove('hidden');
+        }
+
+        async function playTestVoice() {
+            if (!currentTestVoice) return;
+            const text = document.getElementById('test-text-input').value.trim() || 'Hello, this is a voice preview.';
             const audio = document.getElementById('test-audio');
-            section.classList.remove('hidden');
+            const loading = document.getElementById('test-loading');
+            const playBtn = document.getElementById('test-play-btn');
+
+            playBtn.disabled = true;
+            loading.classList.remove('hidden');
             audio.src = '#';
+
             try {
                 const resp = await fetch('/api/voices/preview', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ display_name: name }),
+                    body: JSON.stringify({ display_name: currentTestVoice, text }),
                 });
                 if (resp.ok) {
                     const blob = await resp.blob();
@@ -120,6 +144,10 @@
                     audio.play();
                 }
             } catch (err) { console.error(err); }
+            finally {
+                loading.classList.add('hidden');
+                playBtn.disabled = false;
+            }
         }
 
         async function deleteVoice(name) {
@@ -242,6 +270,7 @@
         }
 
         function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+        function escAttr(s) { return (s || '').replace(/"/g, '&#34;').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
         function formatDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString(); }
 
         document.getElementById('create-voice-btn').addEventListener('click', () => document.getElementById('create-voice-panel').classList.remove('hidden'));
@@ -252,7 +281,10 @@
         document.getElementById('close-test-btn').addEventListener('click', () => {
             document.getElementById('test-audio-section').classList.add('hidden');
             document.getElementById('test-audio').pause();
+            document.getElementById('test-audio').src = '#';
+            currentTestVoice = null;
         });
+        document.getElementById('test-play-btn').addEventListener('click', playTestVoice);
         document.getElementById('gen-create-btn').addEventListener('click', handleGenerateCreate);
         document.querySelectorAll('#create-voice-panel .voice-mode-tab').forEach(t => t.addEventListener('click', () => setCreateMode(t.dataset.mode)));
         document.querySelectorAll('#create-voice-panel .preset-chip').forEach(c => c.addEventListener('click', () => {
