@@ -22,9 +22,6 @@ from project_store import (
     save_project,
     get_project,
     delete_project,
-    load_voices,
-    save_voice,
-    delete_voice,
 )
 
 app = Flask(__name__)
@@ -384,45 +381,111 @@ def api_delete_project(project_id):
     return jsonify({"success": True})
 
 
-@app.route("/api/voices/list", methods=["GET"])
-def api_voices_list():
-    return jsonify(load_voices())
+@app.route("/api/voices/library", methods=["GET"])
+def api_voices_library():
+    try:
+        resp = httpx.get(f"{TTS_API_URL}/voices/list", timeout=10)
+        if resp.status_code != 200:
+            return jsonify([])
+        return jsonify(resp.json())
+    except httpx.ConnectError:
+        return jsonify([])
 
 
 @app.route("/api/voices/save", methods=["POST"])
 def api_voices_save():
     data = request.get_json()
-    name = data.get("name", "").strip()
-    if not name:
+    display_name = data.get("display_name", "").strip()
+    voice_type = data.get("voice_type", "clone")
+    description = data.get("description", "")
+
+    if not display_name:
         return jsonify({"error": "Voice name is required"}), 400
 
-    voice_a = session.get("voice_a")
-    voice_b = session.get("voice_b")
-
-    ref_voice = None
-    if data.get("speaker") == "A":
-        ref_voice = voice_a
-    elif data.get("speaker") == "B":
-        ref_voice = voice_b
+    speaker = data.get("speaker", "A")
+    if speaker == "A":
+        cache_name = session.get("voice_a")
     else:
-        return jsonify({"error": "Invalid speaker"}), 400
+        cache_name = session.get("voice_b")
 
-    if not ref_voice:
+    if not cache_name:
         return jsonify({"error": "No voice cloned for this speaker yet"}), 400
 
-    save_voice({
-        "name": name,
-        "tts_name": ref_voice,
-        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    })
-    return jsonify({"success": True, "name": name})
+    try:
+        resp = httpx.post(
+            f"{TTS_API_URL}/voices/save",
+            json={
+                "name": cache_name,
+                "display_name": display_name,
+                "description": description,
+                "voice_type": voice_type,
+            },
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            return jsonify({"error": f"TTS server error: {resp.text}"}), 500
+    except httpx.ConnectError:
+        return jsonify({"error": "TTS server is not running."}), 503
+
+    if speaker == "A":
+        session["voice_a"] = display_name
+        session["voice_a_display"] = display_name
+    else:
+        session["voice_b"] = display_name
+        session["voice_b_display"] = display_name
+
+    return jsonify({"success": True, "display_name": display_name})
+
+
+@app.route("/api/voices/select", methods=["POST"])
+def api_voices_select():
+    data = request.get_json()
+    display_name = data.get("display_name", "").strip()
+    speaker = data.get("speaker", "A")
+
+    if not display_name:
+        return jsonify({"error": "Voice name is required"}), 400
+
+    try:
+        resp = httpx.post(
+            f"{TTS_API_URL}/voices/load",
+            json={"display_name": display_name},
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            return jsonify({"error": f"TTS server error: {resp.text}"}), 500
+
+        result = resp.json()
+        cache_name = result["name"]
+    except httpx.ConnectError:
+        return jsonify({"error": "TTS server is not running."}), 503
+
+    if speaker == "A":
+        session["voice_a"] = cache_name
+        session["voice_a_display"] = display_name
+    else:
+        session["voice_b"] = cache_name
+        session["voice_b_display"] = display_name
+
+    return jsonify({"success": True, "display_name": display_name})
 
 
 @app.route("/api/voices/delete", methods=["POST"])
 def api_voices_delete():
     data = request.get_json()
-    name = data.get("name", "")
-    delete_voice(name)
+    display_name = data.get("display_name", "")
+
+    try:
+        resp = httpx.post(
+            f"{TTS_API_URL}/voices/delete",
+            json={"display_name": display_name},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return jsonify({"error": f"TTS server error: {resp.text}"}), 500
+    except httpx.ConnectError:
+        return jsonify({"error": "TTS server is not running."}), 503
+
     return jsonify({"success": True})
 
 

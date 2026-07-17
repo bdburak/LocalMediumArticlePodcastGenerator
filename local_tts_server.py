@@ -1,8 +1,10 @@
 import io
+import json
 import base64
 import tempfile
 import os
 import shutil
+import time
 from typing import List, Optional
 from pydantic import BaseModel
 
@@ -22,6 +24,45 @@ tts = TTS(temp_file_location=os.path.join(tempfile.gettempdir(), "qwen3_tts_serv
 
 voice_cache: dict[str, List] = {}
 voice_design_model = None
+
+VOICES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voices")
+os.makedirs(VOICES_DIR, exist_ok=True)
+
+
+def _load_voice_index():
+    index_path = os.path.join(VOICES_DIR, "index.json")
+    if os.path.exists(index_path):
+        with open(index_path, "r") as f:
+            return json.load(f).get("voices", [])
+    return []
+
+
+def _save_voice_index(voices):
+    with open(os.path.join(VOICES_DIR, "index.json"), "w") as f:
+        json.dump({"voices": voices}, f, indent=2)
+
+
+def _save_voice_to_disk(name, clone_items, voice_type, description=""):
+    filepath = os.path.join(VOICES_DIR, f"{name}.pt")
+    torch.save(clone_items, filepath)
+    created_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+    voices = _load_voice_index()
+    voices = [v for v in voices if v["name"] != name]
+    voices.append({
+        "name": name,
+        "type": voice_type,
+        "description": description,
+        "created_at": created_at,
+        "file": f"{name}.pt",
+    })
+    _save_voice_index(voices)
+
+
+def _load_voice_from_disk(name):
+    filepath = os.path.join(VOICES_DIR, f"{name}.pt")
+    if not os.path.exists(filepath):
+        return None
+    return torch.load(filepath, weights_only=False)
 
 
 def get_voice_design_model():
@@ -57,6 +98,21 @@ class VoiceDesignRequest(BaseModel):
     name: str
     description: str
     language: str = "English"
+
+
+class SaveVoiceRequest(BaseModel):
+    name: str
+    display_name: str
+    description: str = ""
+    voice_type: str = "clone"
+
+
+class LoadVoiceRequest(BaseModel):
+    display_name: str
+
+
+class DeleteVoiceRequest(BaseModel):
+    display_name: str
 
 
 @app.post("/voices")
@@ -104,6 +160,48 @@ def create_voice_design(request: VoiceDesignRequest):
 
     voice_cache[request.name] = clone_items
     return {"name": request.name, "success": True}
+
+
+@app.post("/voices/save")
+def save_voice(request: SaveVoiceRequest):
+    clone_items = voice_cache.get(request.name)
+    if clone_items is None:
+        raise HTTPException(404, f"Voice '{request.name}' not found in cache.")
+
+    _save_voice_to_disk(request.display_name, clone_items, request.voice_type, request.description)
+    voice_cache[request.display_name] = clone_items
+    return {"display_name": request.display_name, "success": True}
+
+
+@app.get("/voices/list")
+def list_voices():
+    return _load_voice_index()
+
+
+@app.post("/voices/load")
+def load_voice(request: LoadVoiceRequest):
+    clone_items = _load_voice_from_disk(request.display_name)
+    if clone_items is None:
+        raise HTTPException(404, f"Saved voice '{request.display_name}' not found.")
+
+    cache_name = f"_loaded_{request.display_name}"
+    voice_cache[cache_name] = clone_items
+    return {"name": cache_name, "display_name": request.display_name, "success": True}
+
+
+@app.post("/voices/delete")
+def delete_voice(request: DeleteVoiceRequest):
+    filepath = os.path.join(VOICES_DIR, f"{request.display_name}.pt")
+    if os.path.exists(filepath):
+        os.remove(filepath)
+
+    voices = _load_voice_index()
+    voices = [v for v in voices if v["name"] != request.display_name]
+    _save_voice_index(voices)
+
+    voice_cache.pop(request.display_name, None)
+    voice_cache.pop(f"_loaded_{request.display_name}", None)
+    return {"success": True}
 
 
 @app.post("/speech")

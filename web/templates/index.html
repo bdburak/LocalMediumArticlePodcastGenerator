@@ -55,122 +55,85 @@
             </section>
 
             <section id="stage-2" class="stage hidden">
-                <h2>Prepare Voices</h2>
+                <h2>Select Voices</h2>
+                <p class="description">Choose saved voices for each speaker, or create a new one.</p>
 
-                <div class="voice-mode-tabs">
-                    <button class="voice-mode-tab active" data-mode="clone">Upload Audio</button>
-                    <button class="voice-mode-tab" data-mode="design">Describe Voice</button>
+                <div class="voice-selector-container">
+                    <div class="voice-column">
+                        <h3>Speaker A</h3>
+                        <div id="voice-a-list" class="voice-library"></div>
+                        <div id="voice-a-selected" class="selected-voice hidden">
+                            <span class="voice-type-badge"></span>
+                            <span class="voice-name-display"></span>
+                            <button class="btn icon clear-voice-btn" title="Clear">&times;</button>
+                        </div>
+                        <button id="create-voice-a-btn" class="btn secondary create-voice-btn" data-speaker="A">+ Create New Voice</button>
+                    </div>
+
+                    <div class="voice-column">
+                        <h3>Speaker B</h3>
+                        <div id="voice-b-list" class="voice-library"></div>
+                        <div id="voice-b-selected" class="selected-voice hidden">
+                            <span class="voice-type-badge"></span>
+                            <span class="voice-name-display"></span>
+                            <button class="btn icon clear-voice-btn" title="Clear">&times;</button>
+                        </div>
+                        <button id="create-voice-b-btn" class="btn secondary create-voice-btn" data-speaker="B">+ Create New Voice</button>
+                    </div>
                 </div>
 
-                <div id="voice-mode-clone" class="voice-mode-panel">
-                <p class="description">Upload reference WAV files for each speaker to generate voice clones.</p>
-                
-                <div class="speakers-container">
-                    <div class="speaker-card">
-                        <h3>Speaker A</h3>
-                        <div class="drop-zone" id="drop-zone-a" data-speaker="A">
+                <div id="create-voice-panel" class="create-voice-panel hidden">
+                    <h3 id="create-voice-title">Create New Voice</h3>
+                    <input type="text" id="create-voice-name" class="create-voice-name-input" placeholder="Name this voice (e.g. Warm Host)">
+
+                    <div class="voice-mode-tabs">
+                        <button class="voice-mode-tab active" data-mode="clone">Upload Audio</button>
+                        <button class="voice-mode-tab" data-mode="design">Describe Voice</button>
+                    </div>
+
+                    <div id="vm-clone" class="voice-mode-panel">
+                        <div class="drop-zone" id="create-drop-zone">
                             <div class="drop-zone-content">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="17 8 12 3 7 8"></polyline>
-                                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                                </svg>
-                                <span>Drag & drop WAV file here</span>
-                                <span class="or">or</span>
+                                <span>Drop WAV file here or</span>
                                 <label class="btn secondary file-btn">
-                                    Browse Files
+                                    Browse
                                     <input type="file" accept=".wav" hidden>
                                 </label>
                             </div>
                             <div class="file-info hidden">
                                 <span class="filename"></span>
-                                <button class="btn icon remove-btn" title="Remove">&times;</button>
+                                <button class="btn icon remove-btn">&times;</button>
                             </div>
                         </div>
                         <div class="audio-preview hidden">
                             <audio controls></audio>
                         </div>
-                        <div class="transcript-group">
-                            <label for="transcript-a">Transcript (optional)</label>
-                            <textarea id="transcript-a" placeholder="Paste transcript for better voice cloning precision..."></textarea>
-                        </div>
+                        <textarea id="create-transcript" class="transcript-textarea" placeholder="Transcript (optional, improves clone quality)"></textarea>
                     </div>
 
-                    <div class="speaker-card">
-                        <h3>Speaker B</h3>
-                        <div class="drop-zone" id="drop-zone-b" data-speaker="B">
-                            <div class="drop-zone-content">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="17 8 12 3 7 8"></polyline>
-                                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                                </svg>
-                                <span>Drag & drop WAV file here</span>
-                                <span class="or">or</span>
-                                <label class="btn secondary file-btn">
-                                    Browse Files
-                                    <input type="file" accept=".wav" hidden>
-                                </label>
-                            </div>
-                            <div class="file-info hidden">
-                                <span class="filename"></span>
-                                <button class="btn icon remove-btn" title="Remove">&times;</button>
-                            </div>
-                        </div>
-                        <div class="audio-preview hidden">
-                            <audio controls></audio>
-                        </div>
-                        <div class="transcript-group">
-                            <label for="transcript-b">Transcript (optional)</label>
-                            <textarea id="transcript-b" placeholder="Paste transcript for better voice cloning precision..."></textarea>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="clone-upload-section">
-                    <button id="generate-clones-btn" class="btn primary" disabled>Generate Voice Clones</button>
-                </div>
-                </div>
-
-                <div id="voice-mode-design" class="voice-mode-panel hidden">
-                <p class="description">Describe the voices you want. The AI will create them from scratch -- no audio needed.</p>
-                <div class="speakers-container">
-                    <div class="speaker-card">
-                        <h3>Speaker A</h3>
+                    <div id="vm-design" class="voice-mode-panel hidden">
                         <div class="preset-chips">
-                            <button class="preset-chip" data-speaker="A" data-desc="A warm, calm, middle-aged male podcast host with a deep, resonant voice">Warm host</button>
-                            <button class="preset-chip" data-speaker="A" data-desc="A bright, energetic young female narrator with a clear, engaging tone">Energetic narrator</button>
-                            <button class="preset-chip" data-speaker="A" data-desc="A professional, authoritative male voice with a British accent, news broadcast style">Authoritative British</button>
-                            <button class="preset-chip" data-speaker="A" data-desc="A soft, gentle female voice with a soothing, calming tone, perfect for storytelling">Gentle storyteller</button>
+                            <button class="preset-chip" data-desc="A warm, calm, middle-aged male podcast host with a deep, resonant voice">Warm host</button>
+                            <button class="preset-chip" data-desc="A bright, energetic young female narrator with a clear, engaging tone">Energetic narrator</button>
+                            <button class="preset-chip" data-desc="A professional, authoritative male voice with a British accent">Authoritative British</button>
+                            <button class="preset-chip" data-desc="A soft, gentle female voice with a soothing, calming tone">Gentle storyteller</button>
+                            <button class="preset-chip" data-desc="A bright, curious, energetic young woman, fast pace">Curious co-host</button>
+                            <button class="preset-chip" data-desc="A thoughtful, analytical male voice with a measured pace">Analyst</button>
                         </div>
-                        <textarea id="voice-design-a" class="voice-design-textarea" placeholder="Describe the voice you want for Speaker A...&#10;&#10;Include details like: gender, age, accent, tone, emotion, speaking style. Be as specific as you like.&#10;&#10;Example: A warm, calm, middle-aged male voice with a deep, resonant tone -- like a seasoned radio host."></textarea>
+                        <textarea id="create-voice-description" class="voice-design-textarea" placeholder="Describe the voice: gender, age, accent, tone, emotion, speaking style...&#10;&#10;Example: A warm, calm male voice with a deep, resonant tone -- like a seasoned radio host."></textarea>
                     </div>
-                    <div class="speaker-card">
-                        <h3>Speaker B</h3>
-                        <div class="preset-chips">
-                            <button class="preset-chip" data-speaker="B" data-desc="A bright, curious, energetic young woman with a slightly fast speaking pace">Curious co-host</button>
-                            <button class="preset-chip" data-speaker="B" data-desc="A thoughtful, analytical male voice with a measured pace, like an investigative journalist">Analytical journalist</button>
-                            <button class="preset-chip" data-speaker="B" data-desc="A witty, slightly sarcastic young male voice, casual and conversational">Witty casual</button>
-                            <button class="preset-chip" data-speaker="B" data-desc="A gentle, empathetic female voice with a warm, nurturing quality">Empathetic warm</button>
-                        </div>
-                        <textarea id="voice-design-b" class="voice-design-textarea" placeholder="Describe the voice you want for Speaker B...&#10;&#10;Include details like: gender, age, accent, tone, emotion, speaking style. Be as specific as you like.&#10;&#10;Example: A bright, curious, energetic young woman with a slight American accent -- like a tech podcast co-host."></textarea>
+
+                    <div class="create-voice-actions">
+                        <button id="generate-create-btn" class="btn primary" disabled>Generate & Save Voice</button>
+                        <button id="cancel-create-btn" class="btn secondary">Cancel</button>
                     </div>
-                </div>
-                <div id="voice-design-section">
-                    <button id="design-voices-btn" class="btn primary" disabled>Design Voices</button>
-                </div>
-                <div id="voice-design-status" class="status-panel hidden">
-                    <h3>Designing Voices...</h3>
-                    <ul id="voice-design-steps"></ul>
-                </div>
+
+                    <div id="create-voice-status" class="status-panel hidden">
+                        <ul id="create-voice-steps"></ul>
+                    </div>
                 </div>
 
-                <div id="clone-status" class="status-panel hidden">
-                    <h3>Preparing Voices...</h3>
-                    <ul id="clone-steps"></ul>
-                </div>
-
-                <div id="clone-complete" class="complete-panel hidden">
+                <div id="voice-selection-msg" class="voice-selection-msg hidden">
                     <span class="checkmark">&#10003;</span>
                     <span>Voices ready!</span>
                 </div>
