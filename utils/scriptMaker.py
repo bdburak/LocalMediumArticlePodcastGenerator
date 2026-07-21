@@ -1,4 +1,5 @@
-from utils.textUtils import TextUtils
+import os
+from medium_scraper import scrape, to_markdown, ScrapeError
 from langchain.agents import create_agent
 from langchain.messages import HumanMessage
 from typing import List
@@ -20,13 +21,21 @@ class ScriptMaker:
         url: str = "",
         model: str = "openrouter:deepseek/deepseek-v4-flash",
     ) -> dict:
-        print("getting raw html")
-        rawHTML = await TextUtils.get_medium_article_html_async(url, log_path)
+        print("scraping article")
+        try:
+            article = scrape(url)
+            podcast_article = to_markdown(article)
+        except ScrapeError as e:
+            print(f"Scraping failed: {e}")
+            return dict()
 
-        print("getting the article")
-        podcast_article = TextUtils.get_podcast_ready_content(rawHTML, log_path)
+        if log_path:
+            os.makedirs(log_path, exist_ok=True)
+            log_file = os.path.join(log_path, "LOG_article.md")
+            with open(log_file, "w", encoding="UTF-8") as f:
+                f.write(podcast_article)
 
-        if podcast_article == "":
+        if not podcast_article.strip():
             return dict()
 
         with open("utils/system_prompt.md", "r", encoding="UTF-8") as f:

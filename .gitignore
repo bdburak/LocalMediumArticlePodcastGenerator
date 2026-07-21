@@ -211,3 +211,7 @@ voices/
 
 # Web app runtime data
 web/data/
+
+# Editable package installs
+src/
+*.egg-info/

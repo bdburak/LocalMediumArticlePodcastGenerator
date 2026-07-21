@@ -16,7 +16,7 @@ langsmith>=0.4.43
 langchain-core>=1.1.3
 langchain-openrouter
 html2text
-playwright
+medium-scraper @ git+https://github.com/bdburak/medium-scraper.git
 beautifulsoup4
 qwen-tts
 fastapi
