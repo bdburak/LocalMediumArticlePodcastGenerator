@@ -88,6 +88,51 @@ The installation script does the following:
 3. Install the correct PyTorch version with CUDA support for your GPUs. Currently supports Nvidia GPUs only, up to CUDA 13. Version detection uses `nvidia-smi` command
 4. Verify the torch installation
 
+## Environment
+
+Copy the environment template and fill in your API keys:
+
+```bash
+cp env_template.txt .env
+```
+
+The template covers:
+
+| Variable | Purpose |
+|---|---|
+| `OPENROUTER_API_KEY` | LLM provider for dialog script generation (required) |
+| `OPENAI_API_KEY` | Alternative LLM provider |
+| `ANTHROPIC_API_KEY` | Alternative LLM provider |
+| `GOOGLE_API_KEY` | Alternative LLM provider |
+| `TAVILY_API_KEY` | Web search (optional) |
+| `LANGSMITH_*` | LLM tracing / debugging (optional) |
+
+At minimum you need an OpenRouter API key. Sign up at [openrouter.ai](https://openrouter.ai).
+
+## Usage
+
+Start both the TTS server and web interface:
+
+```bash
+python run_local.py
+```
+
+This launches:
+
+- **TTS server** on `http://127.0.0.1:8091` — loads the model, may take ~10s on first start
+- **Web app** on `http://127.0.0.1:5000` — open this in your browser
+
+### Web workflow
+
+1. **Enter a Medium article URL** — the app scrapes the article and generates a two-host dialog script using an LLM
+2. **Upload reference audio** — drag and drop `.wav` files for Speaker A and Speaker B; optionally provide a transcript for better voice cloning
+3. **Generate voice clones** — creates `.pt` voice embeddings stored in `./voices/`
+4. **Generate podcast** — assembles and interleaves the dialog, downloads the final `.wav`
+
+The Studio page (`/studio`) provides a streamlined interface for saved scripts and voices.
+
+Voice clones persist across restarts in `./voices/`. Generated podcasts are saved to `./static/podcasts/`.
+
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
