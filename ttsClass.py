@@ -25,6 +25,15 @@ class TTS:
             attn_implementation="sdpa",
         )
 
+        if os.environ.get("TTS_COMPILE", "1") != "0":
+            try:
+                t_compile = time.perf_counter()
+                self.model = torch.compile(self.model, mode="reduce-overhead")
+                compile_time = time.perf_counter() - t_compile
+                print(f"[PERF] torch.compile succeeded ({compile_time:.1f}s)")
+            except Exception as e:
+                print(f"[PERF] torch.compile failed: {e}")
+
     def create_voice_clone_prompt_items(
         self, reference_audio_path: str, reference_text: str = ""
     ) -> List[VoiceClonePromptItem]:
