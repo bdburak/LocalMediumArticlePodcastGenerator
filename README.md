@@ -1,6 +1,38 @@
 # Local Medium Article Podcast Generator
 
-This is an app for creating a podcast from Medium.com articles locally. It the [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) library and models for generating voice clones and podcast audio.
+This is an app for creating a podcast from Medium.com articles locally. It uses the [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) library and models for generating voice clones and podcast audio.
+
+## Performance
+
+The TTS pipeline uses [faster-qwen3-tts](https://github.com/toytag/faster-qwen3-tts) for CUDA-graph accelerated inference. Key optimizations:
+
+| Optimization | Effect |
+|---|---|
+| `faster-qwen3-tts` (CUDA graphs) | Captures static inference graphs for reusable forward passes, reducing kernel launch overhead |
+| TF32 + cuDNN benchmark | Enables TensorFloat-32 matmul and auto-tuned cuDNN algorithms for ~15-20% throughput gain on Ada/Ampere GPUs |
+| CUDA graph warmup at startup | Pre-records inference graphs so first real generation is already fast (~1.8s warmup, once per process) |
+| Per-line inference (no batching) | Each text line gets its own CUDA graph; eliminates batch overhead and drops VRAM from 7.8GB to 2.3GB |
+| Consolidated GPU cache clears | `torch.cuda.empty_cache()` only after all lines for a speaker, not per batch |
+
+**Real-world results** (RTX 4060, 8GB VRAM):
+
+| Metric | Before | After |
+|---|---|---|
+| VRAM usage | 7.8 GB | 2.3 GB (-70%) |
+| Per-line speed | ~1.0x real-time | 1.4x -- 2.3x real-time |
+| Podcast generation | -- | ~1.7x overall speedup |
+| Model load + warmup | -- | ~7.3s total |
+
+A 6-minute (374s) podcast with 30 dialog lines generates in ~226s on a single RTX 4060.
+
+### Architecture
+
+Two processes run together via `run_local.py`:
+
+- **FastAPI TTS Server** (port 8091) — loads `FasterQwen3TTS` model once at startup, exposes `/voices`, `/voice-design`, `/speech`, and `/speech/batch` endpoints
+- **Flask Web App** (port 5000) — scrapes Medium articles via `medium-scraper`, generates dialog scripts with an LLM agent, and orchestrates voice cloning + podcast assembly
+
+Voice clones are persisted as `.pt` files in `./voices/` and loaded on demand. The final podcast is assembled by interleaving Host A / Host B dialog lines with 0.5s silence gaps.
 
 ## Setup
 
