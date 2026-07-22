@@ -3,7 +3,7 @@
 With this gui users will be able to create audio podcasts from Mediumm articles. Here is the simple workflow:
 
 1. User enters the URL.
-   1. Playwright and bs4 takeover and fetch the contents of the articles
+    1. The `medium-scraper` library fetches and parses the article content
    2. The article and a system prompt are fed into a langchain agent which creates a podcast dialog script in a json format
    3. The generated script is shown to the user
 2. User proceeds to the next stage which is the voice cloning stage.
