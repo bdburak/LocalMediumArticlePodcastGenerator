@@ -61,6 +61,22 @@ class TTS:
         reserved = torch.cuda.memory_reserved() / 1024**3
         return f"mem_alloc={alloc:.1f}GB mem_res={reserved:.1f}GB"
 
+    @staticmethod
+    def _get_safe_batch_size(requested: int) -> int:
+        if not torch.cuda.is_available():
+            return requested
+        env_val = os.environ.get("TTS_BATCH_SIZE")
+        if env_val:
+            requested = int(env_val)
+        total_gb = torch.cuda.get_device_properties(0).total_mem / 1024**3
+        baseline_gb = torch.cuda.memory_reserved() / 1024**3
+        usable_gb = (total_gb - max(baseline_gb, 0.5)) * 0.85
+        safe = max(1, int(usable_gb / 0.86))
+        capped = min(requested, safe)
+        if capped < requested:
+            print(f"[PERF] batch_size capped {requested} → {capped} (GPU={total_gb:.0f}GB usable={usable_gb:.1f}GB)")
+        return capped
+
     def generate_wav_batched(
         self,
         text: List,
@@ -69,6 +85,7 @@ class TTS:
         batch_size: int = 10,
         language: str = "English",
     ) -> List[str]:
+        batch_size = self._get_safe_batch_size(batch_size)
         t_total = time.perf_counter()
         total_batches = (len(text) + batch_size - 1) // batch_size
         print(f"[PERF] speaker={speaker_name} start lines={len(text)} batches={total_batches} batch_size={batch_size}")
