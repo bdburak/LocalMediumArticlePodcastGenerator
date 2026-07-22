@@ -68,7 +68,7 @@ class TTS:
         env_val = os.environ.get("TTS_BATCH_SIZE")
         if env_val:
             requested = int(env_val)
-        total_gb = torch.cuda.get_device_properties(0).total_mem / 1024**3
+        total_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
         baseline_gb = torch.cuda.memory_reserved() / 1024**3
         usable_gb = (total_gb - max(baseline_gb, 0.5)) * 0.85
         safe = max(1, int(usable_gb / 0.86))
