@@ -21,6 +21,7 @@ app = FastAPI(title="Qwen3-TTS Local Server")
 
 print("Loading TTS model...")
 tts = TTS(temp_file_location=os.path.join(tempfile.gettempdir(), "qwen3_tts_server"))
+tts.warmup()
 
 voice_cache: dict[str, List] = {}
 voice_design_model = None
