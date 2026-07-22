@@ -37,13 +37,14 @@ def test_falls_back_when_preferred_is_busy():
 
 
 def test_raises_runtime_error_if_all_ports_busy():
-    # Occupy the preferred port, then ask with max_tries=0 (zero additional tries).
+    # Occupy an OS-assigned port, then ask with max_tries=0 (zero additional tries).
     blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    blocker.bind(("127.0.0.1", 60000))
+    blocker.bind(("127.0.0.1", 0))
     blocker.listen(1)
+    busy_port = blocker.getsockname()[1]
     try:
         try:
-            find_free_port(preferred=60000, max_tries=0)
+            find_free_port(preferred=busy_port, max_tries=0)
             assert False, "Should have raised RuntimeError"
         except RuntimeError:
             pass
