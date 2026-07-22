@@ -54,6 +54,13 @@ class TTS:
 
         return wav[0], sr
 
+    def _gpu_mem_str(self):
+        if not torch.cuda.is_available():
+            return "mem=N/A"
+        alloc = torch.cuda.memory_allocated() / 1024**3
+        reserved = torch.cuda.memory_reserved() / 1024**3
+        return f"mem_alloc={alloc:.1f}GB mem_res={reserved:.1f}GB"
+
     def generate_wav_batched(
         self,
         text: List,
@@ -62,28 +69,19 @@ class TTS:
         batch_size: int = 10,
         language: str = "English",
     ) -> List[str]:
-        """Generates wav files in a batched fashion from cloned voice and returns an array of paths containing the generated wav files' locations.
+        t_total = time.perf_counter()
+        total_batches = (len(text) + batch_size - 1) // batch_size
+        print(f"[PERF] speaker={speaker_name} start lines={len(text)} batches={total_batches} batch_size={batch_size}")
 
-        Args:
-            text (List): _description_
-            voice_clone_prompt_items (List[VoiceClonePromptItem]): _description_
-            speaker_name (str): _description_
-            batch_size (int, optional): _description_. Defaults to 10.
-            language (str, optional): _description_. Defaults to "English".
-
-        Returns:
-            List[str]: _description_
-        """
         folder_path = f"{self.temp_file_location}/{speaker_name}"
 
-        # delete folder if it exists
         if os.path.exists(folder_path):
             shutil.rmtree(folder_path)
 
-        # create temp wav storage folder for speaker
         os.makedirs(folder_path, exist_ok=True)
 
         batch_clip_paths = []
+        batch_idx = 0
 
         for text_index in range(0, len(text), batch_size):
             batch_text = text[text_index : text_index + batch_size]
@@ -94,10 +92,19 @@ class TTS:
                     language=language,
                     index_begin=text_index,
                     speaker_name=speaker_name,
+                    batch_idx=batch_idx,
+                    total_batches=total_batches,
                 )
             )
+            batch_idx += 1
 
+        t_cache = time.perf_counter()
         torch.cuda.empty_cache()
+        cache_ms = (time.perf_counter() - t_cache) * 1000
+
+        elapsed = time.perf_counter() - t_total
+        avg_per_batch = elapsed / total_batches if total_batches else 0
+        print(f"[PERF] speaker={speaker_name} DONE total={elapsed:.1f}s batches={total_batches} lines={len(text)} avg/batch={avg_per_batch:.1f}s cache_flush={cache_ms:.0f}ms {self._gpu_mem_str()}")
         return batch_clip_paths
 
     def _generate_current_batch(
@@ -106,20 +113,33 @@ class TTS:
         voice_clone_prompt_items: List[VoiceClonePromptItem],
         speaker_name: str,
         index_begin: int,
+        batch_idx: int = 0,
+        total_batches: int = 1,
         language: str = "English",
     ):
-        t1 = time.time()
+        t1 = time.perf_counter()
         with torch.no_grad():
             wavs, sr = self.model.generate_voice_clone(
                 text=text_arr,
                 language=language,
                 voice_clone_prompt=voice_clone_prompt_items,
             )
-        print(f"generated batch starting index:{index_begin}")
-        print(f"batch took {time.time()-t1}")
-        return self._save_temp_wavs_(
+        infer_time = time.perf_counter() - t1
+
+        t_save = time.perf_counter()
+        result = self._save_temp_wavs_(
             wavs=wavs, sr=sr, speaker_name=speaker_name, index_begin=index_begin
         )
+        save_time = time.perf_counter() - t_save
+
+        total_wav_secs = sum(len(w) / sr for w in wavs)
+        print(
+            f"[PERF] speaker={speaker_name} batch={batch_idx}/{total_batches} "
+            f"items={len(text_arr)} range=[{index_begin}:{index_begin+len(text_arr)}] "
+            f"infer={infer_time:.1f}s save={save_time:.2f}s "
+            f"audio={total_wav_secs:.1f}s {self._gpu_mem_str()}"
+        )
+        return result
 
     def _save_temp_wavs_(
         self, wavs: list, sr: int, speaker_name: str, index_begin: int

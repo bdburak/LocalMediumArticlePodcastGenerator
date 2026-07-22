@@ -224,11 +224,14 @@ def generate_speech(request: SpeechRequest):
 
 @app.post("/speech/batch")
 def generate_speech_batch(request: BatchRequest):
+    t_start = time.perf_counter()
     clone_items = voice_cache.get(request.voice)
     if clone_items is None:
         raise HTTPException(404, f"Voice '{request.voice}' not found. Upload it first via POST /voices.")
 
     texts = [item.input for item in request.items]
+    total_chars = sum(len(t) for t in texts)
+    print(f"[PERF] /speech/batch voice={request.voice} lines={len(texts)} chars={total_chars}")
 
     flat_paths: List[str] = []
     batched = tts.generate_wav_batched(
@@ -240,13 +243,17 @@ def generate_speech_batch(request: BatchRequest):
     for batch_paths in batched:
         flat_paths.extend(batch_paths)
 
+    t_encode = time.perf_counter()
     results = []
+    total_audio_bytes = 0
     for i, path in enumerate(flat_paths):
         try:
             audio, sr = sf.read(path)
             buf = io.BytesIO()
             sf.write(buf, audio, sr, format="WAV")
-            b64 = base64.b64encode(buf.getvalue()).decode()
+            raw_bytes = buf.getvalue()
+            b64 = base64.b64encode(raw_bytes).decode()
+            total_audio_bytes += len(raw_bytes)
             results.append({
                 "index": i,
                 "status": "success",
@@ -260,7 +267,18 @@ def generate_speech_batch(request: BatchRequest):
                 "error": str(e),
             })
 
+    encode_time = time.perf_counter() - t_encode
+
     shutil.rmtree(f"{tts.temp_file_location}/{request.voice}", ignore_errors=True)
+
+    elapsed = time.perf_counter() - t_start
+    audio_mb = total_audio_bytes / 1024**2
+    print(
+        f"[PERF] /speech/batch voice={request.voice} DONE "
+        f"total={elapsed:.1f}s encode={encode_time:.2f}s "
+        f"clips={len(flat_paths)} audio={audio_mb:.1f}MB "
+        f"b64+json={audio_mb*1.33:.1f}MB"
+    )
 
     return {
         "results": results,

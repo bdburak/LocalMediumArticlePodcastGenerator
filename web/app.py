@@ -224,13 +224,16 @@ def _generate_podcast_job(
     voice_b_name: str,
     _report=None,
 ) -> str:
+    t_total = time.perf_counter()
     topic = dialog.get("topic", dialog.get("title", ""))
     lines_a = [topic] + [entry["text"] for entry in dialog["script"] if entry["speaker"] == "Host_A"]
     lines_b = [entry["text"] for entry in dialog["script"] if entry["speaker"] == "Host_B"]
+    print(f"[PERF] podcast generate start a_lines={len(lines_a)} b_lines={len(lines_b)}")
 
     if _report:
         _report(10)
 
+    t_a = time.perf_counter()
     resp_a = httpx.post(
         f"{TTS_API_URL}/speech/batch",
         json={
@@ -239,12 +242,14 @@ def _generate_podcast_job(
         },
         timeout=600,
     )
+    a_time = time.perf_counter() - t_a
     if resp_a.status_code != 200:
         raise RuntimeError(f"TTS batch failed for speaker A: {resp_a.text}")
 
     if _report:
         _report(40)
 
+    t_b = time.perf_counter()
     resp_b = httpx.post(
         f"{TTS_API_URL}/speech/batch",
         json={
@@ -253,12 +258,14 @@ def _generate_podcast_job(
         },
         timeout=600,
     )
+    b_time = time.perf_counter() - t_b
     if resp_b.status_code != 200:
         raise RuntimeError(f"TTS batch failed for speaker B: {resp_b.text}")
 
     if _report:
         _report(70)
 
+    t_decode = time.perf_counter()
     wavs_a = []
     for r in resp_a.json()["results"]:
         if r["status"] == "success":
@@ -272,6 +279,7 @@ def _generate_podcast_job(
             buf = io.BytesIO(base64.b64decode(r["audio_data"]))
             wav, _sr = sf.read(buf)
             wavs_b.append(wav)
+    decode_time = time.perf_counter() - t_decode
 
     if _report:
         _report(85)
@@ -281,10 +289,21 @@ def _generate_podcast_job(
     output_filename = f"podcast_{uuid4().hex[:8]}.wav"
     output_path = os.path.join(OUTPUT_DIR, output_filename)
 
+    t_write = time.perf_counter()
     sf.write(output_path, combined, _sr)
+    write_time = time.perf_counter() - t_write
 
     if _report:
         _report(100)
+
+    elapsed = time.perf_counter() - t_total
+    podcast_secs = len(combined) / _sr
+    print(
+        f"[PERF] podcast DONE total={elapsed:.1f}s "
+        f"spk_a={a_time:.1f}s spk_b={b_time:.1f}s tts_total={a_time+b_time:.1f}s "
+        f"decode={decode_time:.2f}s write={write_time:.2f}s "
+        f"podcast_duration={podcast_secs:.0f}s speedup={podcast_secs/elapsed:.1f}x"
+    )
 
     return output_filename
 
@@ -666,27 +685,33 @@ def api_studio_generate():
             topic = dialog.get("topic", dialog.get("title", ""))
             lines_a = [topic] + [entry["text"] for entry in dialog["script"] if entry["speaker"] == "Host_A"]
             lines_b = [entry["text"] for entry in dialog["script"] if entry["speaker"] == "Host_B"]
+            print(f"[PERF] podcast studio start a_lines={len(lines_a)} b_lines={len(lines_b)}")
 
+            t_a = time.perf_counter()
             resp_a = httpx.post(
                 f"{TTS_API_URL}/speech/batch",
                 json={"items": [{"input": t} for t in lines_a], "voice": cache_a},
                 timeout=600,
             )
+            a_time = time.perf_counter() - t_a
             if resp_a.status_code != 200:
                 yield f"data: {json.dumps({'step': 'TTS failed for speaker A', 'status': 'failed'})}\n\n"
                 return
             yield f"data: {json.dumps({'step': 'Speaker A lines generated...', 'progress': 40})}\n\n"
 
+            t_b = time.perf_counter()
             resp_b = httpx.post(
                 f"{TTS_API_URL}/speech/batch",
                 json={"items": [{"input": t} for t in lines_b], "voice": cache_b},
                 timeout=600,
             )
+            b_time = time.perf_counter() - t_b
             if resp_b.status_code != 200:
                 yield f"data: {json.dumps({'step': 'TTS failed for speaker B', 'status': 'failed'})}\n\n"
                 return
             yield f"data: {json.dumps({'step': 'Speaker B lines generated...', 'progress': 70})}\n\n"
 
+            t_decode = time.perf_counter()
             wavs_a = []
             for r in resp_a.json()["results"]:
                 if r["status"] == "success":
@@ -700,8 +725,17 @@ def api_studio_generate():
                     buf = io.BytesIO(base64.b64decode(r["audio_data"]))
                     wav, sr = sf.read(buf)
                     wavs_b.append(wav)
+            decode_time = time.perf_counter() - t_decode
 
             combined = combine_wavs_interleaved(wavs_a[0], wavs_a[1:], wavs_b, sr, 0.5)
+
+            podcast_secs = len(combined) / sr
+            print(
+                f"[PERF] podcast studio DONE "
+                f"spk_a={a_time:.1f}s spk_b={b_time:.1f}s tts_total={a_time+b_time:.1f}s "
+                f"decode={decode_time:.2f}s duration={podcast_secs:.0f}s "
+                f"speedup={podcast_secs/(a_time+b_time):.1f}x"
+            )
 
             jid = uuid4().hex[:8]
             output_filename = f"podcast_{jid}.wav"
