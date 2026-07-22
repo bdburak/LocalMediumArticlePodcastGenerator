@@ -215,3 +215,8 @@ web/data/
 # Editable package installs
 src/
 *.egg-info/
+
+# Inno Setup build output
+installer/staging/
+installer/Output/
+*.exe
