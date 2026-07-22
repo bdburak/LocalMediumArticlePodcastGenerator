@@ -1,5 +1,4 @@
-import subprocess, sys, re, platform
-from urllib.request import urlopen
+import subprocess, sys, re
 import os
 import shutil
 
@@ -24,57 +23,69 @@ def run_command(cmd):
         sys.exit(1)
 
 
-def find_cuda_index_url():
-    # 1. Detect CUDA
-    cuda_version = None
+CUDA_INDEX_MAPPING = {"126": "cu126", "128": "cu128", "130": "cu130"}
+
+
+def pick_torch_index_url(cuda_version_str):
+    """Map a CUDA version string from nvidia-smi to a PyTorch wheel index URL.
+
+    Args:
+        cuda_version_str: Dotted CUDA version (e.g. "12.8") or None if
+            nvidia-smi could not detect a CUDA version.
+
+    Returns:
+        Full URL string like "https://download.pytorch.org/whl/cu128".
+        Falls back to "https://download.pytorch.org/whl/cpu" for unknown
+        or missing versions.
+    """
+    if not cuda_version_str:
+        return "https://download.pytorch.org/whl/cpu"
+
+    normalized = cuda_version_str.replace(".", "")
+    suffix = CUDA_INDEX_MAPPING.get(normalized, "cpu")
+    return f"https://download.pytorch.org/whl/{suffix}"
+
+
+def _detect_cuda_version():
+    """Run nvidia-smi and return the CUDA version string, or None if not found."""
     try:
         output = subprocess.check_output(
             ["nvidia-smi"], text=True, stderr=subprocess.DEVNULL
         )
         match = re.search(r"CUDA Version:\s*([\d\.]+)", output)
         if match:
-            cuda_version = match.group(1).replace(".", "")
+            return match.group(1)
     except Exception:
         pass
-
-    # 2. Map to PyTorch Index (Update as new builds release)
-    mapping = {"126": "cu126", "128": "cu128", "130": "cu130"}
-    index_suffix = mapping.get(cuda_version, "cpu") if cuda_version else "cpu"
-
-    # 3. Verify Wheel Availability (Critical Check)
-    base_url = f"https://download.pytorch.org/whl/{index_suffix}"
-    try:
-        urlopen(base_url, timeout=5)
-        print(f"[+] Verified {index_suffix} index exists.")
-    except Exception:
-        print(f"[!] {index_suffix} not found. Falling back to cu124...")
-        index_suffix = "cu124"  # Safe fallback
-
-    # 4. Install
-    index_url = f"https://download.pytorch.org/whl/{index_suffix}"
-
-    return index_url
+    return None
 
 
-# install requirements.txt
-cmd = ["uv", "pip", "install", "-U", "-r", f"{cwd}/requirements.txt"]
-print(f"[i] Running: {' '.join(cmd)}")
-run_command(cmd)
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Install project requirements + CUDA torch")
+    parser.add_argument("--print-url-only", action="store_true",
+                        help="Print the detected torch index URL and exit (no install)")
+    args = parser.parse_args()
 
-cmd = [
-    "uv",
-    "pip",
-    "install",
-    "-U",
-    "torch",
-    "torchaudio",
-    "--index-url",
-    find_cuda_index_url(),
-]
-print(f"[i] Running: {' '.join(cmd)}")
-run_command(cmd)
+    cuda_version = _detect_cuda_version()
+    index_url = pick_torch_index_url(cuda_version)
 
-# 5. Verify
-import torch
+    if args.print_url_only:
+        print(index_url)
+        return
 
-print(f"[+] PyTorch {torch.__version__} | CUDA: {torch.cuda.is_available()}")
+    # Full install (original CLI behavior)
+    cmd = ["uv", "pip", "install", "-U", "-r", f"{cwd}/requirements.txt"]
+    print(f"[i] Running: {' '.join(cmd)}")
+    run_command(cmd)
+
+    cmd = ["uv", "pip", "install", "-U", "torch", "torchaudio", "--index-url", index_url]
+    print(f"[i] Running: {' '.join(cmd)}")
+    run_command(cmd)
+
+    import torch
+    print(f"[+] PyTorch {torch.__version__} | CUDA: {torch.cuda.is_available()}")
+
+
+if __name__ == "__main__":
+    main()
