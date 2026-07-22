@@ -109,7 +109,11 @@ def api_fetch_article():
     except Exception as e:
         return jsonify({"error": f"Failed to generate script: {str(e)}"}), 500
 
-    if not dialog or not dialog.get("script"):
+    if not dialog or dialog.get("error"):
+        err = (dialog or {}).get("error", {})
+        return jsonify({"error": err.get("message", "Scraping failed")}), 400
+
+    if not dialog.get("script"):
         return jsonify({"error": "Could not generate a script from this article"}), 500
 
     session["dialog"] = dialog
@@ -556,7 +560,11 @@ def api_script_create():
     except Exception as e:
         return jsonify({"error": f"Failed to generate script: {str(e)}"}), 500
 
-    if not dialog or not dialog.get("script"):
+    if not dialog or dialog.get("error"):
+        err = (dialog or {}).get("error", {})
+        return jsonify({"error": err.get("message", "Scraping failed")}), 400
+
+    if not dialog.get("script"):
         return jsonify({"error": "Could not generate a script from this article"}), 500
 
     script_id = save_script({

@@ -27,6 +27,9 @@ class ScriptMaker:
             podcast_article = to_markdown(article)
         except ScrapeError as e:
             print(f"Scraping failed: {e}")
+            return {"error": {"type": "scrape", "title": "Scraping failed", "message": str(e)}}
+
+        if not podcast_article.strip():
             return dict()
 
         if log_path:
@@ -34,9 +37,6 @@ class ScriptMaker:
             log_file = os.path.join(log_path, "LOG_article.md")
             with open(log_file, "w", encoding="UTF-8") as f:
                 f.write(podcast_article)
-
-        if not podcast_article.strip():
-            return dict()
 
         with open("utils/system_prompt.md", "r", encoding="UTF-8") as f:
             system_prompt = f.read()
