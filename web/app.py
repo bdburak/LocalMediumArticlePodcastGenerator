@@ -6,7 +6,6 @@ import base64
 import time
 import asyncio
 from uuid import uuid4
-from concurrent.futures import ThreadPoolExecutor, wait
 
 import httpx
 import soundfile as sf
@@ -232,36 +231,33 @@ def _generate_podcast_job(
     if _report:
         _report(10)
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        fut_a = pool.submit(
-            httpx.post,
-            f"{TTS_API_URL}/speech/batch",
-            json={
-                "items": [{"input": t} for t in lines_a],
-                "voice": voice_a_name,
-            },
-            timeout=600,
-        )
-        fut_b = pool.submit(
-            httpx.post,
-            f"{TTS_API_URL}/speech/batch",
-            json={
-                "items": [{"input": t} for t in lines_b],
-                "voice": voice_b_name,
-            },
-            timeout=600,
-        )
-        wait([fut_a, fut_b])
-        resp_a = fut_a.result()
-        resp_b = fut_b.result()
-
+    resp_a = httpx.post(
+        f"{TTS_API_URL}/speech/batch",
+        json={
+            "items": [{"input": t} for t in lines_a],
+            "voice": voice_a_name,
+        },
+        timeout=600,
+    )
     if resp_a.status_code != 200:
         raise RuntimeError(f"TTS batch failed for speaker A: {resp_a.text}")
+
+    if _report:
+        _report(40)
+
+    resp_b = httpx.post(
+        f"{TTS_API_URL}/speech/batch",
+        json={
+            "items": [{"input": t} for t in lines_b],
+            "voice": voice_b_name,
+        },
+        timeout=600,
+    )
     if resp_b.status_code != 200:
         raise RuntimeError(f"TTS batch failed for speaker B: {resp_b.text}")
 
     if _report:
-        _report(40)
+        _report(70)
 
     wavs_a = []
     for r in resp_a.json()["results"]:
@@ -671,30 +667,25 @@ def api_studio_generate():
             lines_a = [topic] + [entry["text"] for entry in dialog["script"] if entry["speaker"] == "Host_A"]
             lines_b = [entry["text"] for entry in dialog["script"] if entry["speaker"] == "Host_B"]
 
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                fut_a = pool.submit(
-                    httpx.post,
-                    f"{TTS_API_URL}/speech/batch",
-                    json={"items": [{"input": t} for t in lines_a], "voice": cache_a},
-                    timeout=600,
-                )
-                fut_b = pool.submit(
-                    httpx.post,
-                    f"{TTS_API_URL}/speech/batch",
-                    json={"items": [{"input": t} for t in lines_b], "voice": cache_b},
-                    timeout=600,
-                )
-                wait([fut_a, fut_b])
-                resp_a = fut_a.result()
-                resp_b = fut_b.result()
-
+            resp_a = httpx.post(
+                f"{TTS_API_URL}/speech/batch",
+                json={"items": [{"input": t} for t in lines_a], "voice": cache_a},
+                timeout=600,
+            )
             if resp_a.status_code != 200:
                 yield f"data: {json.dumps({'step': 'TTS failed for speaker A', 'status': 'failed'})}\n\n"
                 return
+            yield f"data: {json.dumps({'step': 'Speaker A lines generated...', 'progress': 40})}\n\n"
+
+            resp_b = httpx.post(
+                f"{TTS_API_URL}/speech/batch",
+                json={"items": [{"input": t} for t in lines_b], "voice": cache_b},
+                timeout=600,
+            )
             if resp_b.status_code != 200:
                 yield f"data: {json.dumps({'step': 'TTS failed for speaker B', 'status': 'failed'})}\n\n"
                 return
-            yield f"data: {json.dumps({'step': 'Both speakers generated. Combining audio...', 'progress': 40})}\n\n"
+            yield f"data: {json.dumps({'step': 'Speaker B lines generated...', 'progress': 70})}\n\n"
 
             wavs_a = []
             for r in resp_a.json()["results"]:

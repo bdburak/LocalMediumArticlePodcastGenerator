@@ -59,7 +59,7 @@ class TTS:
         text: List,
         voice_clone_prompt_items: List[VoiceClonePromptItem],
         speaker_name: str,
-        batch_size: int = 5,
+        batch_size: int = 10,
         language: str = "English",
     ) -> List[str]:
         """Generates wav files in a batched fashion from cloned voice and returns an array of paths containing the generated wav files' locations.
@@ -68,7 +68,7 @@ class TTS:
             text (List): _description_
             voice_clone_prompt_items (List[VoiceClonePromptItem]): _description_
             speaker_name (str): _description_
-            batch_size (int, optional): _description_. Defaults to 5.
+            batch_size (int, optional): _description_. Defaults to 10.
             language (str, optional): _description_. Defaults to "English".
 
         Returns:
@@ -97,6 +97,7 @@ class TTS:
                 )
             )
 
+        torch.cuda.empty_cache()
         return batch_clip_paths
 
     def _generate_current_batch(
@@ -115,7 +116,6 @@ class TTS:
                 voice_clone_prompt=voice_clone_prompt_items,
             )
         print(f"generated batch starting index:{index_begin}")
-        torch.cuda.empty_cache()
         print(f"batch took {time.time()-t1}")
         return self._save_temp_wavs_(
             wavs=wavs, sr=sr, speaker_name=speaker_name, index_begin=index_begin

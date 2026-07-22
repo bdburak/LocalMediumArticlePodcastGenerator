@@ -8,7 +8,7 @@ from utils.wavCombiner import combine_wavs_interleaved
 import numpy as np
 import asyncio
 
-batching_count = 5
+batching_count = 10
 
 print("Loading model")
 model = Qwen3TTSModel.from_pretrained(
@@ -104,7 +104,6 @@ async def main():
         speaker_a_wavs.extend(speaker_a_wavs_temp)
 
         del speaker_a_wavs_temp
-        torch.cuda.empty_cache()
 
     print(f"Generating dialog for speaker_b")
     for i, batch in enumerate(batched_speaker_b_lines):
@@ -123,7 +122,8 @@ async def main():
         speaker_b_wavs.extend(speaker_b_wavs_temp)
 
         del speaker_b_wavs_temp
-        torch.cuda.empty_cache()
+
+    torch.cuda.empty_cache()
 
     combined_dialog = combine_wavs_interleaved(
         speaker_a_wavs[0], speaker_a_wavs[1::], speaker_b_wavs, sr, 0.5
