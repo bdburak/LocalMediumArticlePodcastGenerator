@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version from tag
+        id: version
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "APP_VERSION=$TAG" >> "$GITHUB_ENV"
+          echo "Version: $TAG"
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Download and stage portable Python 3.11 embeddable
+        shell: pwsh
+        run: |
+          $pyVersion = "3.11.9"
+          $url = "https://www.python.org/ftp/python/$pyVersion/python-$pyVersion-embed-amd64.zip"
+          New-Item -ItemType Directory -Force -Path installer\staging\python | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile python-embed.zip
+          Expand-Archive -Path python-embed.zip -DestinationPath installer\staging\python -Force
+          Remove-Item python-embed.zip
+
+      - name: Download and stage uv standalone binary
+        shell: pwsh
+        run: |
+          $uvVersion = "0.4.20"
+          $url = "https://github.com/astral-sh/uv/releases/download/$uvVersion/uv-x86_64-pc-windows-msvc.zip"
+          New-Item -ItemType Directory -Force -Path installer\staging\uv | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile uv.zip
+          Expand-Archive -Path uv.zip -DestinationPath uv-tmp -Force
+          Copy-Item uv-tmp\uv-x86_64-pc-windows-msvc.exe installer\staging\uv\uv.exe
+          Remove-Item -Recurse uv.zip, uv-tmp
+
+      - name: Stage source files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path installer\staging\app | Out-Null
+          New-Item -ItemType Directory -Force -Path installer\staging\scripts | Out-Null
+          # Copy project source (entry points, web, utils, configs)
+          Copy-Item *.py, web, utils, requirements.txt, install_requirements.py, env_template.txt, README.md, LICENSE installer\staging\app\
+          # Copy wizard scripts
+          Copy-Item installer\scripts\first_run.ps1, installer\scripts\launch.ps1 installer\staging\scripts\
+          # Copy icon to staging root (installer script references staging\LocalMediumPodcast.ico )
+          Copy-Item installer\LocalMediumPodcast.ico installer\staging\
+          # CRITICAL: installer.iss references LicenseFile=LICENSE (resolved relative to installer\).
+          # Inno Setup looks for installer\LICENSE at compile time — copy it there.
+          Copy-Item LICENSE installer\LICENSE
+
+      - name: Compile installer
+        run: iscc /DAPP_VERSION="$env:APP_VERSION" installer\installer.iss
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: installer\Output\LocalMediumPodcast-Setup-*.exe
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: installer
+          path: installer-artifact
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" installer-artifact/LocalMediumPodcast-Setup-*.exe \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "Requires Windows 10/11, an Nvidia GPU with CUDA 11.8+, and an OpenRouter API key. Download and run the installer, then follow the setup wizard."
