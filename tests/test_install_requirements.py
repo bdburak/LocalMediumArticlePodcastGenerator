@@ -6,9 +6,16 @@ from install_requirements import pick_torch_index_url
 
 
 def test_known_cuda_versions_map_to_correct_suffix():
+    # Preserved (dev-tested on RTX 4060):
     assert pick_torch_index_url("12.6") == "https://download.pytorch.org/whl/cu126"
     assert pick_torch_index_url("12.8") == "https://download.pytorch.org/whl/cu128"
     assert pick_torch_index_url("13.0") == "https://download.pytorch.org/whl/cu130"
+    # Added for spec coverage (CUDA 11.8+):
+    assert pick_torch_index_url("11.8") == "https://download.pytorch.org/whl/cu118"
+    assert pick_torch_index_url("12.0") == "https://download.pytorch.org/whl/cu118"
+    assert pick_torch_index_url("12.1") == "https://download.pytorch.org/whl/cu121"
+    assert pick_torch_index_url("12.5") == "https://download.pytorch.org/whl/cu121"
+    assert pick_torch_index_url("12.7") == "https://download.pytorch.org/whl/cu126"
 
 
 def test_none_cuda_version_falls_back_to_cpu():

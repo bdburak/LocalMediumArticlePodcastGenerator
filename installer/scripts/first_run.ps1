@@ -10,6 +10,7 @@ $appDir    = Split-Path -Parent $scriptDir
 $pythonExe = Join-Path $appDir "python\python.exe"
 $uvExe     = Join-Path $appDir "uv\uv.exe"
 $srcDir    = Join-Path $appDir "app"
+$venvPython = Join-Path $srcDir "ai-podcast\Scripts\python.exe"
 $sentinel  = Join-Path $srcDir ".setup_complete"
 $envFile   = Join-Path $srcDir ".env"
 $logFile   = Join-Path $srcDir "installer.log"
@@ -29,10 +30,19 @@ function Show-Error([string]$msg, [string]$title = "Local Medium Podcast") {
 if (Test-Path $sentinel) {
     Write-Log "Setup already complete. Launching app..."
 
+    try {
+        $nvidiaOut = & nvidia-smi 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "nvidia-smi failed" }
+        Write-Log "GPU present (sanity check passed)"
+    } catch {
+        Show-Error "No Nvidia GPU detected. This app requires an Nvidia GPU with CUDA 11.8+. The app cannot start without it."
+        exit 1
+    }
+
     $readyFile = Join-Path $srcDir ".ready_signal"
     if (Test-Path $readyFile) { Remove-Item $readyFile }
 
-    $proc = Start-Process -FilePath $pythonExe `
+    $proc = Start-Process -FilePath $venvPython `
         -ArgumentList "run_local.py" `
         -WorkingDirectory $srcDir `
         -WindowStyle Normal `
@@ -86,6 +96,13 @@ if ($LASTEXITCODE -ne 0) {
 if ($nvidiaOut -match "CUDA Version:\s*([\d\.]+)") {
     $cudaVersion = $Matches[1]
     Write-Log "Detected CUDA Version: $cudaVersion"
+    $parts = $cudaVersion -split '\.'
+    $major = [int]$parts[0]
+    $minor = if ($parts.Length -gt 1) { [int]$parts[1] } else { 0 }
+    if (($major -lt 11) -or ($major -eq 11 -and $minor -lt 8)) {
+        Show-Error "Your driver only supports CUDA $cudaVersion. This app requires CUDA 11.8+. Please update your Nvidia driver."
+        exit 1
+    }
     [System.Windows.Forms.MessageBox]::Show(
         "Detected Nvidia GPU with CUDA $cudaVersion. Ready to install dependencies.",
         "GPU Check Passed",
@@ -114,6 +131,7 @@ try {
     Push-Location $srcDir
     Write-Log "Creating uv venv ai-podcast with Python 3.11..."
     & $uvExe venv ai-podcast --python 3.11 *>> $logFile
+    $env:VIRTUAL_ENV = Join-Path $srcDir "ai-podcast"
 
     Write-Log "Installing requirements.txt..."
     & $uvExe pip install -U -r requirements.txt *>> $logFile
@@ -228,7 +246,7 @@ if (Test-Path $readyFile) { Remove-Item $readyFile }
 
 # Launch detached, redirecting stdout+stderr to the ready file.
 # run_local.py prints "[READY] flask_port=XXXX tts_port=YYYY" once both servers are up.
-$proc = Start-Process -FilePath $pythonExe `
+$proc = Start-Process -FilePath $venvPython `
     -ArgumentList "run_local.py" `
     -WorkingDirectory $srcDir `
     -WindowStyle Normal `

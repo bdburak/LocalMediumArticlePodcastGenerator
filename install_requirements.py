@@ -4,13 +4,6 @@ import shutil
 
 cwd = os.getcwd()
 
-# Check if 'uv' is available in PATH
-if not shutil.which("uv"):
-    print(
-        "[!] 'uv' command not found in PATH. Please install uv or ensure it's accessible."
-    )
-    sys.exit(1)
-
 
 def run_command(cmd):
     try:
@@ -23,7 +16,18 @@ def run_command(cmd):
         sys.exit(1)
 
 
-CUDA_INDEX_MAPPING = {"126": "cu126", "128": "cu128", "130": "cu130"}
+CUDA_INDEX_MAPPING = {
+    # CUDA 11.8 – 12.0 → cu118
+    "118": "cu118", "119": "cu118", "120": "cu118",
+    # CUDA 12.1 – 12.5 → cu121
+    "121": "cu121", "122": "cu121", "123": "cu121", "124": "cu121", "125": "cu121",
+    # CUDA 12.6 – 12.7 → cu126
+    "126": "cu126", "127": "cu126",
+    # CUDA 12.8 – 12.9 → cu128
+    "128": "cu128", "129": "cu128",
+    # CUDA 13.0 → cu130
+    "130": "cu130",
+}
 
 
 def pick_torch_index_url(cuda_version_str):
@@ -73,6 +77,10 @@ def main():
     if args.print_url_only:
         print(index_url)
         return
+
+    if not shutil.which("uv"):
+        print("[!] 'uv' command not found in PATH. Please install uv or ensure it's accessible.")
+        sys.exit(1)
 
     # Full install (original CLI behavior)
     cmd = ["uv", "pip", "install", "-U", "-r", f"{cwd}/requirements.txt"]
